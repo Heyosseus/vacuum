@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: vacuum-postgres
+    environment:
+      POSTGRES_DB: vacuum_test
+      POSTGRES_USER: vacuum
+      POSTGRES_PASSWORD: secret
+    ports:
+      - '5432:5432'
+    # Vacuum reads planner and I/O statistics, so the test database must collect
+    # them. pg_stat_statements requires preloading; pg_buffercache does not.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - track_io_timing=on
+    volumes:
+      - vacuum-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vacuum -d vacuum_test']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vacuum-pgdata:
