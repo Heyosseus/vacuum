@@ -1,0 +1,77 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['11.*', '12.*']
+        exclude:
+          - php: '8.2'
+            laravel: '12.*'
+
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: vacuum_test
+          POSTGRES_USER: vacuum
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo, pdo_pgsql, pgsql
+          coverage: xdebug
+
+      - name: Install dependencies
+        run: |
+          composer require "illuminate/support:${{ matrix.laravel }}" --no-interaction --no-update
+          composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Lint
+        run: composer test:lint
+
+      - name: Refactor check
+        run: composer test:refacto
+
+      - name: Static analysis
+        run: composer test:types
+
+      - name: Type coverage
+        run: composer test:type-coverage
+
+      - name: Unit tests
+        run: composer test:unit
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: vacuum_test
+          DB_USERNAME: vacuum
+          DB_PASSWORD: secret
