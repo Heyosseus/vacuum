@@ -1,0 +1,12 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/pestphp/pest/extension.neon
+
+parameters:
+    level: max
+    paths:
+        - src
+    tmpDir: build/phpstan
+    checkModelProperties: true
+    checkOctaneCompatibility: true
+    treatPhpDocTypesAsCertain: false
