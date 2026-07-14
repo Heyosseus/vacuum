@@ -5,20 +5,25 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum\Http\Controllers;
 
 use Heyosseus\Vacuum\Advisor\Advisor;
-use Heyosseus\Vacuum\Advisor\Finding;
-use Illuminate\Http\JsonResponse;
+use Heyosseus\Vacuum\Database\ConnectionResolver;
+use Heyosseus\Vacuum\Values\Capabilities;
+use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\View as Views;
 
 final readonly class DashboardController
 {
-    public function __construct(private Advisor $advisor) {}
+    public function __construct(
+        private Advisor $advisor,
+        private Capabilities $capabilities,
+        private ConnectionResolver $connections,
+    ) {}
 
-    public function __invoke(): JsonResponse
+    public function __invoke(): View
     {
-        return new JsonResponse([
-            'findings' => array_map(
-                static fn (Finding $finding): array => $finding->toArray(),
-                $this->advisor->findings(),
-            ),
+        return Views::make('vacuum::dashboard', [
+            'findings' => $this->advisor->findings(),
+            'capabilities' => $this->capabilities,
+            'connection' => $this->connections->resolve()->getName() ?? 'unnamed',
         ]);
     }
 }

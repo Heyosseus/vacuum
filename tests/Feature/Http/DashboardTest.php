@@ -16,7 +16,7 @@ it('answers a request the application has authorized', function (): void {
 
     $this->get('/vacuum')
         ->assertOk()
-        ->assertJsonStructure(['findings']);
+        ->assertSee('Vacuum');
 });
 
 it('lets the application refuse a request of its own accord', function (): void {
@@ -32,9 +32,15 @@ it('forgets an authorization callback between requests of different tests', func
     $this->get('/vacuum')->assertForbidden();
 });
 
-it('reports what the advisor found on the database it is pointed at', function (): void {
-    // The whole chain, end to end: pg_stat_user_tables, through the rules, out
-    // as JSON. A structural assertion on an empty database would pass even if
+it('says which server it is looking at', function (): void {
+    Vacuum::auth(static fn (Request $request): bool => true);
+
+    $this->get('/vacuum')->assertSee('PostgreSQL');
+});
+
+it('shows what the advisor found on the database it is pointed at', function (): void {
+    // The whole chain, end to end: pg_stat_user_tables, through the rules, onto
+    // the page. A structural assertion on an empty database would pass even if
     // the advisor were never asked.
     DB::statement('DROP TABLE IF EXISTS gadgets');
     DB::statement('CREATE TABLE gadgets (id serial PRIMARY KEY)');
@@ -44,11 +50,16 @@ it('reports what the advisor found on the database it is pointed at', function (
 
     Vacuum::auth(static fn (Request $request): bool => true);
 
-    $findings = $this->get('/vacuum')->json('findings');
-
-    expect($findings)->toBeArray()
-        ->and(array_column($findings, 'rule'))->toContain('dead-tuples')
-        ->and(array_column($findings, 'remediation'))->toContain('VACUUM ANALYZE "public"."gadgets";');
+    $this->get('/vacuum')
+        ->assertOk()
+        ->assertSee('public.gadgets')
+        ->assertSee('VACUUM ANALYZE "public"."gadgets";');
 
     DB::statement('DROP TABLE IF EXISTS gadgets');
+});
+
+it('says so plainly when it has nothing to complain about', function (): void {
+    Vacuum::auth(static fn (Request $request): bool => true);
+
+    $this->get('/vacuum')->assertSee('Nothing to report');
 });

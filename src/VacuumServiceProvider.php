@@ -111,12 +111,18 @@ final class VacuumServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'vacuum');
+
         $this->registerRoutes();
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
             ], 'vacuum-config');
+
+            $this->publishes([
+                __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/vacuum'),
+            ], 'vacuum-views');
         }
     }
 

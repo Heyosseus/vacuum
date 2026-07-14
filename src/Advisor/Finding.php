@@ -22,19 +22,4 @@ final readonly class Finding
         public string $impact,
         public ?string $remediation = null,
     ) {}
-
-    /**
-     * @return array{rule: string, subject: string, severity: string, summary: string, impact: string, remediation: string|null}
-     */
-    public function toArray(): array
-    {
-        return [
-            'rule' => $this->rule,
-            'subject' => $this->subject,
-            'severity' => $this->severity->value,
-            'summary' => $this->summary,
-            'impact' => $this->impact,
-            'remediation' => $this->remediation,
-        ];
-    }
 }
