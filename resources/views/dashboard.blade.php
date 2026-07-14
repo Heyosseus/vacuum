@@ -17,6 +17,16 @@
                 <span class="working">Nothing has been deducted.</span>
             @endforelse
         </div>
+
+        {{-- Without this line the score and the letter appear to disagree. They do
+             not: the number is the arithmetic, and the letter is a judgement the
+             arithmetic is not allowed to overrule. --}}
+        @if ($health->capped)
+            <p class="health__capped">
+                Held at {{ $health->grade->value }} because something below is critical.
+                A database with a critical finding does not get a passing grade, whatever the score.
+            </p>
+        @endif
     </section>
 
     <h2>Findings</h2>

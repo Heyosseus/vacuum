@@ -70,6 +70,63 @@ it('never falls through the floor', function (): void {
         ->and(Health::from($findings)->grade)->toBe(Grade::F);
 });
 
+it('refuses to call a database with a critical finding healthy', function (): void {
+    // The arithmetic says 85, which is a B, and a B is a grade you scroll past.
+    // A database on its way to refusing every write is not a B.
+    $health = Health::from([complaint('wraparound', Severity::Critical)]);
+
+    expect($health->score)->toBe(85)
+        ->and($health->grade)->toBe(Grade::D);
+});
+
+it('leaves the arithmetic alone when it caps the grade', function (): void {
+    // The cap is a judgement about the letter, not a thumb on the scale. The
+    // score still has to equal a hundred minus the deductions printed beside it.
+    $health = Health::from([complaint('wraparound', Severity::Critical)]);
+
+    expect($health->score)->toBe(100 - array_sum($health->deductions));
+});
+
+it('admits when the letter is a cap rather than the arithmetic', function (): void {
+    expect(Health::from([complaint('wraparound', Severity::Critical)])->capped)->toBeTrue()
+        ->and(Health::from([complaint('unused-index', Severity::Warning)])->capped)->toBeFalse()
+        ->and(Health::from([])->capped)->toBeFalse();
+});
+
+it('has capped nothing when the score was already below the ceiling', function (): void {
+    // Twelve critical findings grade an F on the arithmetic alone. The ceiling
+    // changed nothing, so the page should not claim it did.
+    $findings = [];
+
+    foreach (['a', 'b', 'c', 'd', 'e', 'f'] as $rule) {
+        $findings[] = complaint($rule, Severity::Critical);
+        $findings[] = complaint($rule, Severity::Critical);
+    }
+
+    expect(Health::from($findings)->capped)->toBeFalse();
+});
+
+it('does not cap the grade for warnings, however many', function (): void {
+    $findings = array_map(
+        fn (int $i): Finding => complaint("rule{$i}", Severity::Warning),
+        range(1, 3),
+    );
+
+    expect(Health::from($findings)->grade)->toBe(Grade::B);
+});
+
+it('does not lift a failing grade to the cap', function (): void {
+    // The cap is a ceiling, not a floor: it can only ever push a grade down.
+    $findings = [];
+
+    foreach (['a', 'b', 'c', 'd', 'e', 'f'] as $rule) {
+        $findings[] = complaint($rule, Severity::Critical);
+        $findings[] = complaint($rule, Severity::Critical);
+    }
+
+    expect(Health::from($findings)->grade)->toBe(Grade::F);
+});
+
 it('puts the rule costing the most at the top of the arithmetic', function (): void {
     $health = Health::from([
         complaint('unused-index', Severity::Warning),

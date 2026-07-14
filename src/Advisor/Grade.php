@@ -22,4 +22,24 @@ enum Grade: string
             default => self::F,
         };
     }
+
+    /**
+     * This grade, or the ceiling if this grade is better than it. A ceiling can
+     * only ever push a grade down: it never rescues a failing one.
+     */
+    public function noBetterThan(self $ceiling): self
+    {
+        return $this->standing() > $ceiling->standing() ? $ceiling : $this;
+    }
+
+    private function standing(): int
+    {
+        return match ($this) {
+            self::A => 4,
+            self::B => 3,
+            self::C => 2,
+            self::D => 1,
+            self::F => 0,
+        };
+    }
 }

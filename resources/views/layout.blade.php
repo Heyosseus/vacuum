@@ -115,6 +115,7 @@
         .health__score em { margin-left: auto; font-style: normal; font-weight: 600; color: var(--muted); }
 
         .health__working { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+        .health__capped { margin: 0.75rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--line); color: var(--critical); font-size: 0.8125rem; }
         .working { font-size: 0.8125rem; color: var(--muted); }
         .working code { font-family: ui-monospace, Menlo, monospace; }
 

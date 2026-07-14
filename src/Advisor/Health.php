@@ -19,12 +19,26 @@ final readonly class Health
     private const int MOST_ONE_RULE_CAN_COST = 25;
 
     /**
+     * The best a database with a critical finding is allowed to be called.
+     *
+     * Left to the arithmetic, one critical finding costs fifteen and grades a B,
+     * and a B is a grade you scroll past. Whether a critical finding is worth
+     * fifteen points is a question about the score; whether a database that has
+     * one may be called healthy is not.
+     */
+    private const Grade CEILING_WITH_A_CRITICAL_FINDING = Grade::D;
+
+    /**
      * @param  array<string, int>  $deductions  What each rule cost, dearest first.
+     * @param  bool  $capped  Whether the letter is lower than the score alone would
+     *                        have given, so the page can say so rather than leave a
+     *                        reader to wonder why 85 is a D.
      */
     private function __construct(
         public int $score,
         public Grade $grade,
         public array $deductions,
+        public bool $capped,
     ) {}
 
     /**
@@ -53,7 +67,24 @@ final readonly class Health
         arsort($deductions);
 
         $score = max(0, 100 - array_sum($deductions));
+        $grade = self::grade($score, $findings);
 
-        return new self($score, Grade::for($score), $deductions);
+        return new self($score, $grade, $deductions, capped: $grade !== Grade::for($score));
+    }
+
+    /**
+     * @param  list<Finding>  $findings
+     */
+    private static function grade(int $score, array $findings): Grade
+    {
+        $grade = Grade::for($score);
+
+        foreach ($findings as $finding) {
+            if ($finding->severity === Severity::Critical) {
+                return $grade->noBetterThan(self::CEILING_WITH_A_CRITICAL_FINDING);
+            }
+        }
+
+        return $grade;
     }
 }
