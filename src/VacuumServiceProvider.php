@@ -6,14 +6,18 @@ namespace Heyosseus\Vacuum;
 
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\BloatRule;
+use Heyosseus\Vacuum\Advisor\IndexRule;
 use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Inspections\BloatInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\IndexInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\TableInspection;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
+use Heyosseus\Vacuum\Advisor\Rules\UnusedIndex;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
+use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
 use Heyosseus\Vacuum\Queries\TableStatistics;
 use Heyosseus\Vacuum\Support\SqlRepository;
@@ -31,6 +35,9 @@ final class VacuumServiceProvider extends ServiceProvider
 
     /** The same, for a rule that judges wasted space rather than dead tuples. */
     public const string BLOAT_RULES = 'vacuum.bloat-rules';
+
+    /** The same, for a rule that judges an index. */
+    public const string INDEX_RULES = 'vacuum.index-rules';
 
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
@@ -57,6 +64,7 @@ final class VacuumServiceProvider extends ServiceProvider
 
         $this->app->tag([DeadTuples::class], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
+        $this->app->tag([UnusedIndex::class], self::INDEX_RULES);
 
         $this->app->bind(TableInspection::class, fn (Application $app): TableInspection => new TableInspection(
             $app->make(TableStatistics::class),
@@ -68,7 +76,16 @@ final class VacuumServiceProvider extends ServiceProvider
             $this->rules($app, self::BLOAT_RULES, BloatRule::class),
         ));
 
-        $this->app->tag([TableInspection::class, BloatInspection::class], self::INSPECTIONS);
+        $this->app->bind(IndexInspection::class, fn (Application $app): IndexInspection => new IndexInspection(
+            $app->make(IndexStatistics::class),
+            $this->rules($app, self::INDEX_RULES, IndexRule::class),
+        ));
+
+        $this->app->tag([
+            TableInspection::class,
+            BloatInspection::class,
+            IndexInspection::class,
+        ], self::INSPECTIONS);
 
         $this->app->bind(Advisor::class, function (Application $app): Advisor {
             $inspections = [];
