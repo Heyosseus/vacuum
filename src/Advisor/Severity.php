@@ -14,4 +14,13 @@ enum Severity: string
 
     /** Costing something now, or heading somewhere that will hurt. */
     case Critical = 'critical';
+
+    public function rank(): int
+    {
+        return match ($this) {
+            self::Critical => 0,
+            self::Warning => 1,
+            self::Info => 2,
+        };
+    }
 }
