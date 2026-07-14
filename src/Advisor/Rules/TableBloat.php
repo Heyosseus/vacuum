@@ -50,6 +50,12 @@ final readonly class TableBloat implements BloatRule
                 .'the whole rewrite. On a table anybody is using, pg_repack does the same job without the '
                 .'lock, and is what you want in production.',
             remediation: 'VACUUM FULL '.Identifier::qualified($table->schema, $table->name).';',
+            query: 'SELECT pg_size_pretty(pg_table_size('.Identifier::literal($table->qualifiedName())."::regclass)) AS table_size,\n"
+                .'       pg_size_pretty(pg_indexes_size('.Identifier::literal($table->qualifiedName())."::regclass)) AS index_size,\n"
+                ."       n_live_tup, n_dead_tup, last_autovacuum\n"
+                ."FROM pg_stat_user_tables\n"
+                .'WHERE schemaname = '.Identifier::literal($table->schema)
+                .' AND relname = '.Identifier::literal($table->name).';',
         );
     }
 

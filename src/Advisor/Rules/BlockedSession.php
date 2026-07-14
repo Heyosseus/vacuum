@@ -36,6 +36,12 @@ final readonly class BlockedSession implements SessionRule
                 .'session that is waiting: pg_cancel_backend stops the statement and leaves the connection '
                 .'alive to roll back, where pg_terminate_backend takes the whole connection down.',
             remediation: 'SELECT pg_cancel_backend('.($session->blockedBy[0] ?? 0).');',
+
+            // The whole chain, waiter and blockers together, so you can see what the
+            // blocker is doing before you cancel it.
+            query: "SELECT pid, state, wait_event_type, wait_event, xact_start, query\n"
+                ."FROM pg_stat_activity\n"
+                ."WHERE pid IN ({$session->pid}, {$blockers});",
         );
     }
 

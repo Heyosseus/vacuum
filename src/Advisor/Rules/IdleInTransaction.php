@@ -50,6 +50,12 @@ final readonly class IdleInTransaction implements SessionRule
                 .'holds every lock its transaction took. The cause is usually application code that opens a '
                 .'transaction and then waits on something slow -- an HTTP call, a queue, a person.',
             remediation: "SELECT pg_terminate_backend({$session->pid});",
+
+            // What the session is, what it last ran, and how long its transaction
+            // has been open. Read this before you terminate anything.
+            query: "SELECT pid, usename, application_name, state, xact_start, state_change, query\n"
+                ."FROM pg_stat_activity\n"
+                ."WHERE pid = {$session->pid};",
         );
     }
 

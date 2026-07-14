@@ -17,6 +17,9 @@ final readonly class Finding
     /**
      * @param  string|null  $remediation  A statement that would put it right, if one would.
      * @param  string|null  $evidence  The thing being complained about, shown verbatim.
+     * @param  string|null  $query  A read-only statement that shows the reader what the rule
+     *                              saw, ready to open in the console. Never the remediation:
+     *                              that one writes, and the console refuses to write.
      */
     public function __construct(
         public string $rule,
@@ -26,5 +29,6 @@ final readonly class Finding
         public string $impact,
         public ?string $remediation = null,
         public ?string $evidence = null,
+        public ?string $query = null,
     ) {}
 }

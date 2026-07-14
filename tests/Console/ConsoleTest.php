@@ -21,6 +21,22 @@ it('shows the console to somebody the application let in', function (): void {
     $this->get('/vacuum/console')->assertOk()->assertSee('Console');
 });
 
+it('types a statement into the box when a finding sends one', function (): void {
+    $this->get('/vacuum/console?statement='.urlencode('SELECT n_dead_tup FROM pg_stat_user_tables'))
+        ->assertOk()
+        ->assertSee('SELECT n_dead_tup FROM pg_stat_user_tables', escape: false);
+});
+
+it('does not run the statement a link arrived with', function (): void {
+    // Following a link must never execute anything. The query is put in the box and
+    // left there: the person who arrives decides whether it runs.
+    DB::insert("INSERT INTO tins (label) VALUES ('anchovies')");
+
+    $this->get('/vacuum/console?statement='.urlencode('SELECT label FROM tins'))
+        ->assertOk()
+        ->assertDontSee('anchovies');
+});
+
 it('runs a select and shows what came back', function (): void {
     DB::insert("INSERT INTO tins (label) VALUES ('anchovies'), ('sardines')");
 

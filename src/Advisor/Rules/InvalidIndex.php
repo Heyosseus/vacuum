@@ -44,6 +44,12 @@ final readonly class InvalidIndex implements IndexRule
                 .'built by a CREATE INDEX CONCURRENTLY running right now is also marked invalid until it '
                 .'finishes, and looks exactly like this. Check that nobody is building it before you drop it.',
             remediation: 'DROP INDEX CONCURRENTLY '.Identifier::qualified($index->schema, $index->name).';',
+
+            // Whether anything is building it right now. An empty result means
+            // nobody is, and the index is simply wreckage.
+            query: "SELECT pid, phase, blocks_done, blocks_total\n"
+                ."FROM pg_stat_progress_create_index\n"
+                .'WHERE index_relid = '.Identifier::literal($index->qualifiedName()).'::regclass;',
         );
     }
 }

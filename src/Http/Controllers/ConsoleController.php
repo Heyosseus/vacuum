@@ -23,9 +23,17 @@ final readonly class ConsoleController
         private ConnectionResolver $connections,
     ) {}
 
-    public function show(): View
+    /**
+     * The console, optionally with a statement already typed into it.
+     *
+     * A finding on the dashboard links here carrying the query that shows what the
+     * rule saw. It is put in the box and left there: arriving at a page that has
+     * already run something against your database, because you clicked a link, is
+     * not a thing this package will ever do.
+     */
+    public function show(Request $request): View
     {
-        return $this->page();
+        return $this->page($request->string('statement')->toString());
     }
 
     public function run(Request $request): View

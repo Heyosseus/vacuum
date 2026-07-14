@@ -87,6 +87,14 @@ final readonly class StaleStatistics implements TableRule
                 .'to be, and a query that ran in milliseconds runs for minutes with nothing in the logs to say why.',
             remediation: 'ANALYZE '.Identifier::qualified($table->schema, $table->name).';',
             evidence: $evidence,
+
+            // What the planner currently believes about each column of this table.
+            // These are the numbers it is choosing plans from.
+            query: "SELECT attname, n_distinct, null_frac, correlation\n"
+                ."FROM pg_stats\n"
+                .'WHERE schemaname = '.Identifier::literal($table->schema)
+                .' AND tablename = '.Identifier::literal($table->name)."\n"
+                .'ORDER BY attname;',
         );
     }
 

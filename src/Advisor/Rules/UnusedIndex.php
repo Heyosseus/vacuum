@@ -51,6 +51,14 @@ final readonly class UnusedIndex implements IndexRule
                 .'counters belong to this server alone, so an index untouched here may be serving every read '
                 .'on a replica, and an index used by a monthly report looks unused for twenty-nine days.',
             remediation: 'DROP INDEX CONCURRENTLY '.Identifier::qualified($index->schema, $index->name).';',
+
+            // Every index on the table, with its scan count, so the one being
+            // complained about can be read next to the ones earning their keep.
+            query: "SELECT indexrelname, idx_scan, pg_size_pretty(pg_relation_size(indexrelid)) AS size\n"
+                ."FROM pg_stat_user_indexes\n"
+                .'WHERE schemaname = '.Identifier::literal($index->schema)
+                .' AND relname = '.Identifier::literal($index->table)."\n"
+                .'ORDER BY idx_scan;',
         );
     }
 

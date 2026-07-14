@@ -44,6 +44,14 @@ final readonly class DuplicateIndex implements DuplicateRule
                     : ''),
             remediation: 'DROP INDEX CONCURRENTLY '.Identifier::qualified($duplicate->schema, $duplicate->name).';',
             evidence: $duplicate->definition,
+
+            // Every index on the table, side by side, so the copy and the original
+            // can be read against each other before anything is dropped.
+            query: "SELECT indexname, indexdef\n"
+                ."FROM pg_indexes\n"
+                .'WHERE schemaname = '.Identifier::literal($duplicate->schema)
+                .' AND tablename = '.Identifier::literal($duplicate->table)."\n"
+                .'ORDER BY indexname;',
         );
     }
 }

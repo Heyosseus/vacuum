@@ -1,64 +1,118 @@
 @extends('vacuum::layout')
 
 @section('content')
-    <h2>Console</h2>
-
-    <form method="POST" action="{{ route('vacuum.console.run') }}" class="console">
-        @csrf
-
-        <textarea name="statement" rows="5" spellcheck="false"
-                  placeholder="SELECT relname, n_dead_tup FROM pg_stat_user_tables ORDER BY n_dead_tup DESC">{{ $statement }}</textarea>
-
-        <div class="console__foot">
-            <p class="console__note">
-                Statements run inside a READ ONLY transaction that is always rolled back.
-                PostgreSQL refuses the write, not this form.
-            </p>
-
-            <button type="submit">Run</button>
+    <section class="panel">
+        <div class="panel__bar">
+            <span>Console</span>
+            <span class="right">read only · rolled back · {{ $connection }}</span>
         </div>
-    </form>
 
-    @error('statement')
-        <p class="error">{{ $message }}</p>
-    @enderror
+        <div class="panel__body">
+            <form method="POST" action="{{ route('vacuum.console.run') }}" class="console">
+                @csrf
 
-    @if ($error !== null)
-        <pre class="error">{{ $error }}</pre>
-    @endif
+                <textarea name="statement" rows="8" spellcheck="false" autofocus
+                          aria-label="Statement to run"
+                          placeholder="SELECT relname, n_dead_tup FROM pg_stat_user_tables ORDER BY n_dead_tup DESC">{{ $statement }}</textarea>
+
+                <div class="console__foot">
+                    <p class="promise">
+                        Runs inside a <b>read-only transaction</b> that is always rolled back.
+                        PostgreSQL refuses the write, not this form.
+                    </p>
+
+                    <button type="submit" class="run">Run</button>
+                </div>
+            </form>
+
+            @error('statement')
+                <p class="error">{{ $message }}</p>
+            @enderror
+
+            @if ($error !== null)
+                {{-- PostgreSQL's own words, the way PostgreSQL said them. A console
+                     that rewrites the database's errors is a console that lies about
+                     them. --}}
+                <pre class="error">{{ $error }}</pre>
+            @endif
+        </div>
+    </section>
 
     @if ($result !== null)
-        <p class="result__meta">
-            {{ number_format($result->found) }} {{ Str::plural('row', $result->found) }}
-            in {{ number_format($result->milliseconds, 1) }} ms
-            @if ($result->truncated())
-                &middot; showing the first {{ number_format(count($result->rows)) }}
-            @endif
-        </p>
+        <section class="panel">
+            <div class="panel__bar">
+                <span>Result</span>
+                <span class="right">
+                    {{ number_format($result->found) }} {{ Str::plural('row', $result->found) }}
+                    in {{ number_format($result->milliseconds, 1) }} ms
 
-        @if ($result->rows === [])
-            <p class="empty">The statement returned nothing.</p>
-        @else
-            <div class="result">
-                <table>
-                    <thead>
-                        <tr>
-                            @foreach ($result->columns as $column)
-                                <th>{{ $column }}</th>
-                            @endforeach
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($result->rows as $row)
+                    @if ($result->truncated())
+                        · showing the first {{ number_format(count($result->rows)) }}
+                    @endif
+                </span>
+            </div>
+
+            @if ($result->rows === [])
+                <div class="empty">
+                    <p>The statement returned nothing.</p>
+                    <p>It ran, and it matched no rows.</p>
+                </div>
+            @else
+                <div class="scroll">
+                    <table>
+                        <thead>
                             <tr>
                                 @foreach ($result->columns as $column)
-                                    <td>{{ $row[$column] ?? '' }}</td>
+                                    <th>{{ $column }}</th>
                                 @endforeach
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endif
+                        </thead>
+                        <tbody>
+                            @foreach ($result->rows as $row)
+                                <tr>
+                                    @foreach ($result->columns as $column)
+                                        <td>{{ $row[$column] ?? '' }}</td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </section>
     @endif
+@endsection
+
+@section('status')
+    <div class="status" role="status">
+        <span><b>ctrl</b> + <b>enter</b> run</span>
+        <span><b>esc</b> back to findings</span>
+        <span class="said">every statement is rolled back</span>
+    </div>
+
+    <script>
+        (function () {
+            const form = document.querySelector('.console');
+            const box = form.querySelector('textarea');
+
+            // The habit every SQL client has taught: run what is in the box without
+            // reaching for the mouse.
+            box.addEventListener('keydown', function (event) {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                    form.submit();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    window.location = @json(route('vacuum.dashboard'));
+                }
+            });
+
+            // A statement that arrived from a finding is left with the caret at the
+            // end rather than selected. Nobody wants their first keystroke to delete
+            // the query they came here to read.
+            box.setSelectionRange(box.value.length, box.value.length);
+        })();
+    </script>
 @endsection

@@ -39,6 +39,12 @@ final readonly class AutovacuumDisabled implements SettingRule
                 .'over this — but that emergency vacuum arrives without warning, on a table by then far larger '
                 .'than it should be, and it is not the gentle background work autovacuum was doing for you.',
             remediation: "ALTER SYSTEM SET autovacuum = on;\nSELECT pg_reload_conf();",
+
+            // Including where the setting came from. A value from a config file is a
+            // decision somebody wrote down; one from a session is an accident.
+            query: "SELECT name, setting, source, sourcefile, sourceline\n"
+                ."FROM pg_settings\n"
+                ."WHERE name IN ('autovacuum', 'track_counts', 'autovacuum_naptime');",
         );
     }
 }

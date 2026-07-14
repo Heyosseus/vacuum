@@ -50,6 +50,10 @@ final readonly class DeadTuples implements TableRule
                 .'and the space is not returned to the operating system until the table is vacuumed. '
                 .'Autovacuum has either not kept up or is not running often enough for this table.',
             remediation: 'VACUUM ANALYZE '.Identifier::qualified($table->schema, $table->name).';',
+            query: "SELECT n_live_tup, n_dead_tup, n_mod_since_analyze, last_vacuum, last_autovacuum\n"
+                ."FROM pg_stat_user_tables\n"
+                .'WHERE schemaname = '.Identifier::literal($table->schema)
+                .' AND relname = '.Identifier::literal($table->name).';',
         );
     }
 

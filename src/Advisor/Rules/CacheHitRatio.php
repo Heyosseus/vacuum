@@ -49,6 +49,15 @@ final readonly class CacheHitRatio implements CacheRule
                 .'holds a cache of its own underneath it, so a miss here is not always a trip to the disk. It '
                 .'is also an average over the whole life of these counters, which hides an afternoon of '
                 .'thrashing inside a year of good behaviour.',
+
+            // Which tables are missing the cache, rather than the average that says
+            // only that somebody is.
+            query: "SELECT relname, heap_blks_hit, heap_blks_read,\n"
+                ."       round(100.0 * heap_blks_hit / nullif(heap_blks_hit + heap_blks_read, 0), 1) AS hit_percent\n"
+                ."FROM pg_statio_user_tables\n"
+                ."WHERE heap_blks_read > 0\n"
+                ."ORDER BY heap_blks_read DESC\n"
+                .'LIMIT 20;',
         );
     }
 

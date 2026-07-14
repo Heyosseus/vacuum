@@ -6,199 +6,470 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Vacuum</title>
 
-    {{-- Styles are inlined rather than fetched. The dashboard is often the thing
-         you open when the database is unwell, sometimes from a machine that
-         cannot reach a CDN, and it should not itself need the network to render. --}}
+    {{-- Inlined, and every typeface is already on the machine. This is the page you
+         open when the database is unwell, sometimes from a laptop that cannot reach
+         the internet, and it must not need the network to say what is wrong.
+
+         It is built as a text-mode tool, not a web page: boxed panels with title
+         bars, inverse-video selection, and the keys it answers to printed along the
+         bottom where a tool has always printed them. Monospace carries the
+         structure. The interface face appears only where a person wrote a sentence,
+         because long prose in a monospace column is a wall, and the point of this
+         page is to be read quickly by somebody in a hurry. --}}
     <style>
         :root {
-            color-scheme: light dark;
-            --bg: #fbfbfa;
-            --panel: #ffffff;
-            --line: #e6e4e0;
-            --ink: #21201c;
-            --muted: #63625e;
-            --code: #f4f3f1;
-            --critical: #b4372a;
-            --warning: #a86a1c;
-            --info: #4a6fa5;
+            color-scheme: dark light;
+
+            /* Warm phosphor on a warm black. A cold blue-black terminal is the
+               costume everybody wears; a CRT was never neutral grey. */
+            --bg: #14120f;
+            --panel: #1b1815;
+            --raised: #23201b;
+            --line: #322d26;
+            --ink: #ece4d4;
+            --muted: #9c9284;
+            --faint: #6b6357;
+
+            --amber: #e0a02e;
+            --green: #7fb069;
+            --red: #e2604f;
+            --cyan: #6ea8c4;
+
+            --critical: var(--red);
+            --warning: var(--amber);
+            --info: var(--cyan);
+            --good: var(--green);
+            --empty: #2b2721;
+
+            --ui: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+            --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
         }
 
-        @media (prefers-color-scheme: dark) {
+        @media (prefers-color-scheme: light) {
             :root {
-                --bg: #191918;
-                --panel: #212120;
-                --line: #33322f;
-                --ink: #edecea;
-                --muted: #9a9892;
-                --code: #2a2a28;
-                --critical: #e8836f;
-                --warning: #d9a441;
-                --info: #8aabd8;
+                --bg: #e8e3d7;
+                --panel: #f2eee4;
+                --raised: #e2ddd0;
+                --line: #c9c2b2;
+                --ink: #23201a;
+                --muted: #5f594d;
+                --faint: #8b8477;
+
+                --amber: #9a6a06;
+                --green: #3d7a2f;
+                --red: #b03a2a;
+                --cyan: #2c6f8e;
+                --empty: #d6d0c1;
             }
         }
 
-        * { box-sizing: border-box; }
+        *, *::before, *::after { box-sizing: border-box; }
 
         body {
             margin: 0;
+            padding-bottom: 2.25rem;
             background: var(--bg);
             color: var(--ink);
-            font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            font: 400 13.5px/1.6 var(--ui);
+            font-variant-numeric: tabular-nums;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .wrap { max-width: 62rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+        .wrap { max-width: 64rem; margin: 0 auto; padding: 1rem 1rem 2rem; }
 
-        header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-        header h1 { font-size: 1.375rem; margin: 0; letter-spacing: -0.01em; }
-        header p { margin: 0; color: var(--muted); font-size: 0.8125rem; }
+        :focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
 
-        h2 { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 2.5rem 0 0.75rem; }
+        .hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
 
-        .finding {
-            background: var(--panel);
+        /* ---- panels: a box with a title welded into its top edge ------------ */
+
+        .panel { border: 1px solid var(--line); background: var(--panel); margin-bottom: 0.75rem; }
+
+        .panel__bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.375rem 0.625rem;
+            background: var(--raised);
+            border-bottom: 1px solid var(--line);
+            font: 400 0.6875rem/1.4 var(--mono);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+
+        .panel__bar b { color: var(--ink); font-weight: 400; }
+        .panel__bar .right { margin-left: auto; text-transform: none; letter-spacing: 0; }
+        .panel__body { padding: 0.875rem 0.9375rem; }
+
+        /* ---- masthead -------------------------------------------------------- */
+
+        .masthead {
+            display: flex;
+            align-items: center;
+            gap: 0.875rem;
+            flex-wrap: wrap;
+            padding: 0.4375rem 0.625rem;
+            background: var(--raised);
             border: 1px solid var(--line);
-            border-left: 3px solid var(--line);
-            border-radius: 6px;
-            padding: 1rem 1.125rem;
+            font: 400 0.75rem/1.4 var(--mono);
             margin-bottom: 0.75rem;
         }
-        .finding--critical { border-left-color: var(--critical); }
-        .finding--warning { border-left-color: var(--warning); }
-        .finding--info { border-left-color: var(--info); }
 
-        .finding__head { display: flex; align-items: center; gap: 0.625rem; flex-wrap: wrap; }
-        .finding__subject { font-weight: 600; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.875rem; }
+        .masthead__name { margin: 0; font: 600 0.75rem/1.4 var(--mono); letter-spacing: 0.22em; color: var(--amber); }
+        .masthead__server { color: var(--faint); }
+        .masthead__server b { color: var(--muted); font-weight: 400; }
+        .masthead nav { margin-left: auto; display: flex; gap: 0.375rem; }
 
-        .badge {
-            font-size: 0.6875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
+        .masthead nav a {
             padding: 0.125rem 0.4375rem;
-            border-radius: 3px;
-            border: 1px solid currentColor;
+            color: var(--muted);
+            text-decoration: none;
         }
-        .badge--critical { color: var(--critical); }
-        .badge--warning { color: var(--warning); }
-        .badge--info { color: var(--info); }
 
-        .rule { font-size: 0.75rem; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+        .masthead nav a:hover { color: var(--ink); }
 
-        .finding__summary { margin: 0.625rem 0 0; }
-        .finding__impact { margin: 0.375rem 0 0; color: var(--muted); font-size: 0.875rem; }
+        /* Inverse video for the current tab: this is how a text-mode tool has always
+           said "you are here", and it needs no colour to do it. */
+        .masthead nav a[aria-current="page"] { color: var(--bg); background: var(--ink); }
 
-        pre {
+        /* ---- score ----------------------------------------------------------- */
+
+        .score { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: center; }
+
+        .score__figure { text-align: center; }
+
+        .score__number { font: 400 3.25rem/1 var(--mono); letter-spacing: -0.02em; }
+
+        .score--a .score__number { color: var(--good); }
+        .score--b .score__number { color: var(--cyan); }
+        .score--c .score__number, .score--d .score__number { color: var(--amber); }
+        .score--f .score__number { color: var(--red); }
+
+        .score__grade {
+            margin: 0.375rem 0 0;
+            font: 400 0.6875rem/1 var(--mono);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+
+        /* A hundred cells, because a table is pages, and every rule below is arguing
+           about pages being wasted. Each rule eats exactly what it cost. */
+        .map { display: grid; grid-template-columns: repeat(25, 1fr); gap: 2px; margin: 0 0 0.625rem; }
+
+        .cell { aspect-ratio: 1; padding: 0; border: 0; background: var(--empty); }
+        .cell--critical { background: var(--critical); }
+        .cell--warning { background: var(--warning); }
+        .cell--info { background: var(--info); }
+        .cell--spent { cursor: pointer; }
+        .cell--spent:hover, .cell[aria-pressed="true"] { outline: 1px solid var(--ink); outline-offset: 1px; }
+
+        .legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0; font: 400 0.75rem/1.5 var(--mono); color: var(--muted); }
+        .legend__cost { color: var(--ink); }
+        .legend__free { color: var(--faint); }
+
+        .capped {
+            grid-column: 1 / -1;
             margin: 0.875rem 0 0;
-            padding: 0.625rem 0.75rem;
-            background: var(--code);
-            border-radius: 4px;
-            overflow-x: auto;
-            font: 0.8125rem/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+            padding: 0.5rem 0.625rem;
+            background: var(--raised);
+            border-left: 3px solid var(--red);
+            font-size: 0.8125rem;
         }
 
-        .health {
-            margin-top: 2rem;
-            background: var(--panel);
+        /* ---- toolbar ---------------------------------------------------------- */
+
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            padding: 0.4375rem 0.625rem;
+            background: var(--raised);
             border: 1px solid var(--line);
-            border-top: 3px solid var(--info);
-            border-radius: 6px;
-            padding: 1.25rem 1.375rem;
+            border-bottom: 0;
+            font: 400 0.75rem/1.4 var(--mono);
         }
-        .health--a { border-top-color: #3f8f5f; }
-        .health--b { border-top-color: var(--info); }
-        .health--c, .health--d { border-top-color: var(--warning); }
-        .health--f { border-top-color: var(--critical); }
 
-        .health__score { display: flex; align-items: baseline; gap: 0.5rem; }
-        .health__score strong { font-size: 2.25rem; font-weight: 650; letter-spacing: -0.02em; }
-        .health__score span { color: var(--muted); font-size: 0.875rem; }
-        .health__score em { margin-left: auto; font-style: normal; font-weight: 600; color: var(--muted); }
+        .filters { display: flex; gap: 0.25rem; }
 
-        .health__working { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
-        .health__capped { margin: 0.75rem 0 0; padding-top: 0.75rem; border-top: 1px solid var(--line); color: var(--critical); font-size: 0.8125rem; }
-        .working { font-size: 0.8125rem; color: var(--muted); }
-        .working code { font-family: ui-monospace, Menlo, monospace; }
-
-        .evidence { color: var(--muted); white-space: pre-wrap; }
-
-        nav { display: flex; gap: 1rem; font-size: 0.875rem; }
-        nav a { color: var(--muted); text-decoration: none; }
-        nav a:hover, nav a[aria-current] { color: var(--ink); }
-
-        .console textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            background: var(--panel);
-            color: var(--ink);
-            font: 0.875rem/1.6 ui-monospace, "SF Mono", Menlo, monospace;
-            resize: vertical;
-        }
-        .console__foot { display: flex; align-items: center; gap: 1rem; margin-top: 0.625rem; }
-        .console__note { margin: 0; font-size: 0.75rem; color: var(--muted); }
-        .console button {
-            margin-left: auto;
-            padding: 0.4375rem 1.125rem;
-            border: 1px solid var(--line);
-            border-radius: 5px;
-            background: var(--ink);
-            color: var(--bg);
-            font-size: 0.875rem;
-            font-weight: 600;
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.125rem 0.4375rem;
+            font: inherit;
+            color: var(--muted);
+            background: transparent;
+            border: 0;
             cursor: pointer;
         }
 
+        .chip:hover { color: var(--ink); }
+        .chip[aria-pressed="true"] { color: var(--bg); background: var(--ink); }
+        .chip[aria-pressed="true"] .chip__count { color: var(--bg); }
+
+        .chip__key { color: var(--amber); }
+        .chip[aria-pressed="true"] .chip__key { color: var(--bg); }
+        .chip__mark { width: 7px; height: 7px; }
+        .chip__mark--critical { background: var(--critical); }
+        .chip__mark--warning { background: var(--warning); }
+        .chip__mark--info { background: var(--info); }
+        .chip__count { color: var(--faint); }
+
+        .search {
+            flex: 1;
+            min-width: 9rem;
+            padding: 0.125rem 0.375rem;
+            font: inherit;
+            color: var(--ink);
+            background: var(--bg);
+            border: 1px solid var(--line);
+        }
+
+        .search:focus { outline: none; border-color: var(--amber); }
+        .search::placeholder { color: var(--faint); }
+
+        .sort { padding: 0.125rem; font: inherit; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+        .tally { margin: 0; color: var(--faint); }
+
+        /* ---- findings ---------------------------------------------------------- */
+
+        .findings { border: 1px solid var(--line); background: var(--panel); }
+
+        .finding {
+            display: grid;
+            grid-template-columns: 6.5rem 1fr;
+            gap: 0 1rem;
+            padding: 0.75rem 0.9375rem;
+            border-bottom: 1px solid var(--line);
+            cursor: pointer;
+        }
+
+        .finding:last-child { border-bottom: 0; }
+        .finding:hover { background: var(--raised); }
+
+        /* The selected row is inverse-video down its left edge, the way a text-mode
+           list has always shown the cursor. */
+        .finding[data-on] { background: var(--raised); box-shadow: inset 3px 0 0 var(--amber); }
+
+        .gutter { font: 400 0.6875rem/1.6 var(--mono); }
+        .gutter__severity { display: block; letter-spacing: 0.1em; text-transform: uppercase; }
+        .finding--critical .gutter__severity { color: var(--critical); }
+        .finding--warning .gutter__severity { color: var(--warning); }
+        .finding--info .gutter__severity { color: var(--info); }
+        .gutter__rule { display: block; color: var(--faint); word-break: break-word; }
+
+        .body { min-width: 0; }
+        .subject { margin: 0; font: 500 0.875rem/1.4 var(--mono); word-break: break-word; }
+        .summary { margin: 0.25rem 0 0; font-size: 0.9375rem; }
+
+        /* The impact is the paragraph that teaches you the internals, and it is why
+           this package exists. It is also four lines long, and a reader scanning ten
+           findings does not want forty. So it waits until it is asked for. */
+        .why {
+            margin-top: 0.5rem;
+            padding: 0;
+            font: 400 0.75rem/1 var(--mono);
+            color: var(--faint);
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+        }
+
+        .why:hover { color: var(--amber); }
+        .why::before { content: "[+] "; }
+        .why[aria-expanded="true"]::before { content: "[-] "; }
+
+        .impact {
+            margin: 0.5rem 0 0;
+            padding-left: 0.75rem;
+            border-left: 1px solid var(--line);
+            color: var(--muted);
+            max-width: 66ch;
+        }
+
+        pre {
+            margin: 0;
+            padding: 0.4375rem 0.625rem;
+            background: var(--bg);
+            border: 1px solid var(--line);
+            overflow-x: auto;
+            font: 400 0.75rem/1.6 var(--mono);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .evidence { margin-top: 0.5rem; color: var(--muted); }
+
+        .actions { display: flex; align-items: stretch; gap: 0.625rem; margin-top: 0.625rem; flex-wrap: wrap; }
+
+        /* Inspect opens a SELECT and is safe. Copy hands over a statement that
+           writes, for somewhere Vacuum cannot reach. They must not look alike. */
+        .inspect {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.3125rem 0.625rem;
+            font: 400 0.75rem/1.4 var(--mono);
+            color: var(--bg);
+            background: var(--amber);
+            border: 1px solid var(--amber);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .inspect:hover { filter: brightness(1.12); }
+
+        .fix { display: flex; flex: 1; min-width: 14rem; align-items: stretch; }
+        .fix pre { flex: 1; border-right: 0; }
+
+        .copy {
+            padding: 0 0.625rem;
+            font: 400 0.75rem/1.4 var(--mono);
+            color: var(--muted);
+            background: var(--raised);
+            border: 1px solid var(--line);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .copy:hover { color: var(--ink); }
+
+        /* ---- tables ------------------------------------------------------------- */
+
+        .scroll { overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; font: 400 0.75rem/1.5 var(--mono); }
+        th, td { text-align: left; padding: 0.4375rem 0.625rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+
+        th {
+            font-weight: 400;
+            font-size: 0.625rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--faint);
+            background: var(--raised);
+        }
+
+        tbody tr:last-child td { border-bottom: 0; }
+        tbody tr:hover { background: var(--raised); }
+        .note { color: var(--faint); }
+
+        /* ---- console -------------------------------------------------------------- */
+
+        .console textarea {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            font: 400 0.8125rem/1.7 var(--mono);
+            color: var(--ink);
+            background: var(--bg);
+            border: 1px solid var(--line);
+            resize: vertical;
+            tab-size: 2;
+        }
+
+        .console textarea:focus { outline: none; border-color: var(--amber); }
+
+        .console__foot { display: flex; align-items: center; gap: 0.875rem; margin-top: 0.625rem; flex-wrap: wrap; }
+        .promise { margin: 0; flex: 1; min-width: 16rem; font-size: 0.8125rem; color: var(--muted); }
+        .promise b { color: var(--ink); font-weight: 500; }
+
+        .run {
+            padding: 0.375rem 1.125rem;
+            font: 400 0.75rem/1.4 var(--mono);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--bg);
+            background: var(--amber);
+            border: 1px solid var(--amber);
+            cursor: pointer;
+        }
+
+        .run:hover { filter: brightness(1.12); }
+
         .error {
-            margin-top: 1rem;
-            padding: 0.75rem 0.875rem;
-            border: 1px solid var(--critical);
-            border-radius: 5px;
-            color: var(--critical);
-            font: 0.8125rem/1.5 ui-monospace, Menlo, monospace;
+            margin: 0.75rem 0 0;
+            padding: 0.5rem 0.625rem;
+            background: var(--panel);
+            border: 1px solid var(--red);
+            border-left-width: 3px;
+            color: var(--red);
+            font: 400 0.75rem/1.6 var(--mono);
             white-space: pre-wrap;
         }
 
-        .result__meta { color: var(--muted); font-size: 0.8125rem; }
-        .result { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-        table { border-collapse: collapse; width: 100%; font-size: 0.8125rem; }
-        th, td {
-            text-align: left;
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid var(--line);
-            font-family: ui-monospace, Menlo, monospace;
+        .empty { padding: 2rem 1rem; text-align: center; }
+        .empty p { margin: 0; }
+        .empty p + p { margin-top: 0.25rem; color: var(--muted); font-size: 0.8125rem; }
+
+        /* ---- status bar: the keys, where a tool has always printed them ---------- */
+
+        .status {
+            position: fixed;
+            inset: auto 0 0 0;
+            z-index: 5;
+            display: flex;
+            gap: 1rem;
+            overflow-x: auto;
+            padding: 0.4375rem 1rem;
+            background: var(--raised);
+            border-top: 1px solid var(--line);
+            font: 400 0.6875rem/1.4 var(--mono);
+            color: var(--muted);
             white-space: nowrap;
         }
-        th { color: var(--muted); font-weight: 600; }
-        tbody tr:last-child td { border-bottom: 0; }
 
-        .empty {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            padding: 2rem;
-            text-align: center;
-            color: var(--muted);
+        .status b { color: var(--bg); background: var(--amber); padding: 0 0.25rem; font-weight: 400; }
+        .status .said { margin-left: auto; color: var(--green); }
+
+        [hidden] { display: none !important; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; animation: none !important; }
+        }
+
+        @media (max-width: 40rem) {
+            .score { grid-template-columns: 1fr; }
+            .finding { grid-template-columns: 1fr; gap: 0.375rem; }
+            .gutter { display: flex; gap: 0.625rem; }
+            .status { display: none; }
         }
     </style>
 </head>
 <body>
 <div class="wrap">
-    <header>
-        <h1>Vacuum</h1>
+    <header class="masthead">
+        <h1 class="masthead__name">VACUUM</h1>
+
+        <span class="masthead__server">
+            PostgreSQL <b>{{ $capabilities->majorVersion() }}</b> · <b>{{ $connection }}</b>
+        </span>
 
         <nav>
-            <a href="{{ route('vacuum.dashboard') }}">Findings</a>
+            <a href="{{ route('vacuum.dashboard') }}"
+               @if (request()->routeIs('vacuum.dashboard')) aria-current="page" @endif>findings</a>
 
             @if (Route::has('vacuum.console'))
-                <a href="{{ route('vacuum.console') }}">Console</a>
+                <a href="{{ route('vacuum.console') }}"
+                   @if (request()->routeIs('vacuum.console*')) aria-current="page" @endif>console</a>
             @endif
         </nav>
-
-        <p>PostgreSQL {{ $capabilities->majorVersion() }} &middot; {{ $connection }}</p>
     </header>
 
     @yield('content')
 </div>
+
+@yield('status')
 </body>
 </html>

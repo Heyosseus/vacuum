@@ -44,6 +44,12 @@ final readonly class SlowStatement implements StatementRule
                 .'first is worth chasing. Run it through EXPLAIN (ANALYZE, BUFFERS) with parameters that '
                 .'match a slow case, and look for a sequential scan where you expected an index.',
             evidence: $statement->sql,
+
+            // The whole row pg_stat_statements holds for this shape, including the
+            // spread the mean is hiding: min, max, and the standard deviation.
+            query: "SELECT calls, mean_exec_time, min_exec_time, max_exec_time, stddev_exec_time, rows, query\n"
+                ."FROM pg_stat_statements\n"
+                .'WHERE queryid = '.$statement->queryId.';',
         );
     }
 

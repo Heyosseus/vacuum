@@ -22,4 +22,13 @@ final class Identifier
     {
         return '"'.str_replace('"', '""', $identifier).'"';
     }
+
+    /**
+     * The same name as a string literal, for the catalog views that compare
+     * schemaname and relname as text rather than taking an identifier.
+     */
+    public static function literal(string $value): string
+    {
+        return "'".str_replace("'", "''", $value)."'";
+    }
 }

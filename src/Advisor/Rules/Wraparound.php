@@ -56,6 +56,15 @@ final readonly class Wraparound implements TableRule
                 .'If the age reaches the limit, PostgreSQL refuses every new write transaction until the database '
                 .'is shut down and vacuumed in single-user mode. It does not slow down first.',
             remediation: 'VACUUM (FREEZE, ANALYZE) '.Identifier::qualified($table->schema, $table->name).';',
+
+            // The ten oldest tables in the cluster, not just this one. If something
+            // is holding the horizon back, it is holding every table back, and the
+            // shape of that list is what tells you which.
+            query: "SELECT relname, age(relfrozenxid) AS xid_age\n"
+                ."FROM pg_class\n"
+                ."WHERE relkind = 'r'\n"
+                ."ORDER BY age(relfrozenxid) DESC\n"
+                .'LIMIT 10;',
         );
     }
 

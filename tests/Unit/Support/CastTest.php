@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+use Heyosseus\Vacuum\Support\Identifier;
+
+it('quotes a name that would otherwise end the string literal', function (): void {
+    // pg_stats compares tablename as text, not as an identifier, so a table called
+    // o'brien has to survive the trip into a WHERE clause.
+    expect(Identifier::literal("o'brien"))->toBe("'o''brien'")
+        ->and(Identifier::literal('orders'))->toBe("'orders'");
+});
+
 use Carbon\CarbonImmutable;
 use Heyosseus\Vacuum\Support\Cast;
 
