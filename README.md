@@ -1,55 +1,194 @@
 # Vacuum
 
-**A PostgreSQL analytics, monitoring and tuning dashboard for Laravel.**
+**A PostgreSQL monitoring and tuning dashboard for Laravel.**
 
-Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_statio_*`, `pg_stat_activity`, `pg_class.reloptions` — and turns it into a dashboard that tells you what is wrong and what to do about it.
+Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_stat_activity`, `pg_stat_database`, `pg_stat_statements`, `pg_class` — and turns it into a page that says what is wrong, what it is costing you, and the statement that would put it right.
 
-> **Status: in development.** Nothing below is released yet.
+It shows you that statement. It never runs it.
 
-## What it shows
+> **Status: in development.** Not released yet.
 
-- **Bloat & vacuum health** — dead tuples per table, live/dead ratio, last autovacuum and autoanalyze, tables overdue for a vacuum, per-table `fillfactor` and autovacuum storage parameters.
-- **Index health** — indexes that have never been scanned, redundant and duplicate indexes, index size against table size, tables doing sequential scans that shouldn't be.
-- **Cache, buffers & I/O** — heap and index cache hit ratios, `shared_buffers` against database size, temp file spills that mean `work_mem` is too low.
-- **Connections & activity** — active, idle and idle-in-transaction sessions, the longest-running query, the lock tree behind a blocked query, transaction age against wraparound.
-- **Suggestions** — every panel's findings passed through an advisor that explains the problem, the impact, and the exact SQL that would fix it. Vacuum shows you the SQL. It never runs it.
-- **SQL console** *(opt-in)* — run `SELECT` and `EXPLAIN` against your database from the browser, inside a `READ ONLY` transaction with a statement timeout that is always rolled back.
+## What it tells you
+
+| Rule | Finds |
+| --- | --- |
+| `dead-tuples` | Tables carrying more deleted-but-unreclaimed rows than they should |
+| `table-bloat` | Tables whose files are much larger than the rows inside them |
+| `unused-index` | Large indexes no query has ever read |
+| `cache-hit-ratio` | A database going to disk more often than it should |
+| `idle-in-transaction` | Transactions opened and then abandoned |
+| `blocked-session` | Sessions stuck waiting on somebody else's lock |
+| `slow-statement` | The shapes of query that cost the most per run |
+
+Every finding carries a severity, what the problem costs you, and — where a single statement would fix it — the SQL to run. Findings roll up into a health score out of 100, which is computed *from the findings themselves*, so the grade can never disagree with the list beneath it.
 
 ## Requirements
 
-- PHP 8.2+
+- PHP 8.3+
 - Laravel 11 or 12
-- PostgreSQL 13+
+- PostgreSQL 14+
+
+`pg_stat_statements` is optional. Without it, Vacuum says so on the page rather than quietly showing you an empty panel.
 
 ## Installation
 
 ```bash
 composer require heyosseus/vacuum
-```
-
-Publish the configuration:
-
-```bash
 php artisan vendor:publish --tag=vacuum-config
 ```
 
-Then visit `/vacuum`.
+Then open `/vacuum`.
 
-## Safety
+## Who may look
 
-Vacuum is a read-only tool by construction. It issues `SELECT` statements against PostgreSQL's statistics views and nothing else. The optional SQL console runs inside a read-only transaction, so PostgreSQL itself — not a keyword filter — rejects any attempt to write.
+**Vacuum opens in `local` and refuses everywhere else.** A forgotten configuration should lock the door, not publish the shape of your database.
 
-Point `VACUUM_CONNECTION` at a role with no write privileges and the tool cannot damage your database even if it is compromised.
+To let anyone else in, register a callback — typically in `AppServiceProvider::boot()`:
+
+```php
+use Heyosseus\Vacuum\Vacuum;
+
+Vacuum::auth(fn (Request $request) => $request->user()?->isAdmin() === true);
+```
+
+This is a callback rather than a Laravel gate on purpose. A gate is skipped entirely for a guest unless its first parameter is nullable, so the `fn ($user) => …` everyone writes would silently deny a developer who is not logged in, on their own laptop, where the dashboard is most useful.
+
+If you authorize on the user, keep session middleware in the stack, or `$request->user()` will be null:
+
+```php
+'middleware' => ['web', 'auth'],
+```
+
+Vacuum appends its own authorization middleware to whatever you list, so the dashboard cannot be exposed by emptying that array.
+
+## Which database
+
+By default Vacuum inspects your application's default connection, which must be PostgreSQL — it refuses anything else rather than reporting nonsense.
+
+```env
+VACUUM_CONNECTION=pgsql_readonly
+```
+
+Point that at a role granted `pg_monitor` and nothing else. Vacuum never needs write access, and giving it none is the cheapest safety net you will ever configure.
+
+## The SQL console
+
+Off by default. Off means the route does not exist — not a page that says no.
+
+```env
+VACUUM_CONSOLE_ENABLED=true
+```
+
+Statements run inside a transaction PostgreSQL has been told is `READ ONLY`, with a `statement_timeout`, and the transaction is always rolled back.
+
+**The keyword check is not what makes this safe.** Vacuum turns away statements that do not begin with a word that reads, but that is a courtesy for people who type `DELETE` by accident. It is not a defence, and it cannot be one:
+
+```sql
+WITH written AS (INSERT INTO orders (id) VALUES (1) RETURNING *) SELECT * FROM written
+```
+
+That begins with `WITH`, walks straight past any keyword filter, and writes to your database. What stops it is PostgreSQL, which refuses the write inside a read-only transaction. There is a test that smuggles exactly that statement through and then asserts the table is still empty.
+
+`EXPLAIN ANALYZE` really runs the query it explains, so it needs its own switch:
+
+```env
+VACUUM_CONSOLE_EXPLAIN_ANALYZE=true
+```
+
+### A word on Laravel and read-only transactions
+
+This is worth writing down, because it is not obvious and it silently defeats the naive implementation.
+
+Laravel's `LostConnectionDetector` treats PostgreSQL's `SQLSTATE[25006]` — *cannot execute INSERT in a read-only transaction* — as a **lost connection**. If your read-only transaction is one Laravel does not know about (a raw `BEGIN TRANSACTION READ ONLY`), then `Connection::run()` catches the rejection, decides the connection died, reconnects, and **retries the statement on a fresh connection outside the transaction** — committing the very write PostgreSQL just refused.
+
+Vacuum opens the transaction through Laravel's own `beginTransaction()` and then issues `SET TRANSACTION READ ONLY`. With `transactions >= 1`, Laravel rethrows instead of retrying. That is the entire reason the safety claim above is true rather than merely asserted, and it is covered by a test named `it does not let a rejected write be retried onto a fresh connection`.
+
+## Tuning the thresholds
+
+Every rule reads its limits from `config/vacuum.php`. The defaults are set for a database somebody depends on, not for a table you made a minute ago:
+
+```php
+'thresholds' => [
+    'dead_tuple_ratio' => 0.20,
+    'dead_tuple_minimum' => 1_000,
+    'cache_hit_ratio' => 0.99,
+    'cache_hit_minimum_blocks' => 100_000,
+    'bloat_bytes' => 100 * 1024 * 1024,
+    'unused_index_min_size' => 1024 * 1024,
+    'long_running_query_seconds' => 60,
+    'idle_in_transaction_seconds' => 300,
+    'slow_query_milliseconds' => 500,
+],
+```
+
+## Writing your own rule
+
+A rule is handed one value object and returns a finding or nothing. It never touches the database, so it tests without one:
+
+```php
+use Heyosseus\Vacuum\Advisor\{Finding, Severity, TableRule};
+use Heyosseus\Vacuum\Values\TableStatistic;
+
+final readonly class NeverAnalyzed implements TableRule
+{
+    public function inspect(TableStatistic $table): ?Finding
+    {
+        if ($table->lastAnalyzedAt() !== null) {
+            return null;
+        }
+
+        return new Finding(
+            rule: 'never-analyzed',
+            subject: $table->qualifiedName(),
+            severity: Severity::Warning,
+            summary: 'Nothing has ever analyzed this table, so the planner is guessing.',
+            impact: 'Without statistics the planner cannot estimate row counts, and it will choose a bad plan confidently.',
+            remediation: "ANALYZE {$table->qualifiedName()};",
+        );
+    }
+}
+```
+
+Tag it, and the advisor picks it up:
+
+```php
+use Heyosseus\Vacuum\VacuumServiceProvider;
+
+$this->app->tag([NeverAnalyzed::class], VacuumServiceProvider::TABLE_RULES);
+```
+
+There is a tag per subject — `TABLE_RULES`, `BLOAT_RULES`, `INDEX_RULES`, `CACHE_RULES`, `SESSION_RULES`, `STATEMENT_RULES` — because a rule should be given the one thing it reasons about, and adding a rule should never widen what has to be queried before it can run.
+
+## Restyling the dashboard
+
+```bash
+php artisan vendor:publish --tag=vacuum-views
+```
+
+The stylesheet is inlined rather than fetched from a CDN, on the grounds that the dashboard is what you open when the database is unwell, sometimes from a machine that cannot reach the internet.
 
 ## Development
 
-Vacuum tests against a real PostgreSQL instance, because the statistics views it reads cannot be simulated:
+Vacuum tests against a real PostgreSQL server. The statistics views it reads are the whole product, and SQLite cannot pretend to have them.
 
 ```bash
-docker compose up -d
 composer install
+cp phpunit.xml.dist phpunit.xml     # then put your database credentials in it
 composer test
 ```
+
+`phpunit.xml` is gitignored, which is where your credentials should live.
+
+`composer test` runs Rector, Pint, PHPStan at `level: max`, 100% type coverage and 100% line coverage. All of them have to pass.
+
+For the `pg_stat_statements` tests, the extension must exist. It needs the library preloaded, which is read at startup:
+
+```sql
+ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';  -- then restart the server
+CREATE EXTENSION pg_stat_statements;
+```
+
+Those tests skip themselves if it is missing, though the coverage gate will then fail.
 
 ## License
 
