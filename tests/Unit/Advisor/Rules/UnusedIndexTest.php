@@ -22,6 +22,7 @@ function anIndex(
         bytes: $bytes,
         unique: $unique,
         primary: $primary,
+        valid: true,
         countingSince: $countingSince,
     );
 }

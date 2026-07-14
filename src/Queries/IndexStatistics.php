@@ -37,6 +37,7 @@ final readonly class IndexStatistics
                 pg_relation_size(statistics.indexrelid) AS index_bytes,
                 indexes.indisunique,
                 indexes.indisprimary,
+                indexes.indisvalid,
                 (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS counting_since
             FROM pg_stat_user_indexes AS statistics
             JOIN pg_index AS indexes ON indexes.indexrelid = statistics.indexrelid
@@ -63,6 +64,7 @@ final readonly class IndexStatistics
             bytes: Cast::integer($row['index_bytes'] ?? null),
             unique: Cast::boolean($row['indisunique'] ?? null),
             primary: Cast::boolean($row['indisprimary'] ?? null),
+            valid: Cast::boolean($row['indisvalid'] ?? null),
             countingSince: Cast::timestamp($row['counting_since'] ?? null),
         );
     }

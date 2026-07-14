@@ -13,6 +13,9 @@ final readonly class IndexStatistic
 {
     /**
      * @param  int  $scans  Reads served since PostgreSQL last reset its counters.
+     * @param  bool  $valid  Whether the planner will consider it at all. A failed
+     *                       CREATE INDEX CONCURRENTLY leaves an index behind that
+     *                       every write maintains and no query is allowed to use.
      * @param  CarbonImmutable|null  $countingSince  When that reset was, if it ever happened.
      */
     public function __construct(
@@ -23,6 +26,7 @@ final readonly class IndexStatistic
         public int $bytes,
         public bool $unique,
         public bool $primary,
+        public bool $valid,
         public ?CarbonImmutable $countingSince,
     ) {}
 

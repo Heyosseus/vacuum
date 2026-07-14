@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Values\IndexStatistic;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 beforeEach(function (): void {
@@ -47,6 +48,23 @@ it('tells an index you added from a constraint the database is enforcing', funct
     expect(index('pallets_label_index')?->constrains())->toBeFalse()
         ->and(index('pallets_pkey')?->primary)->toBeTrue()
         ->and(index('pallets_pkey')?->constrains())->toBeTrue();
+});
+
+it('reports an index a failed concurrent build left behind', function (): void {
+    // The real thing, not a fabricated flag. A unique index built concurrently over
+    // data that already holds duplicates fails on its second pass, and PostgreSQL
+    // leaves the half-built index in place, marked invalid, maintained by every
+    // write and usable by no query.
+    DB::insert("INSERT INTO pallets (label) VALUES ('duplicate'), ('duplicate')");
+
+    try {
+        DB::statement('CREATE UNIQUE INDEX CONCURRENTLY pallets_label_unique ON pallets (label)');
+    } catch (QueryException) {
+        // Expected: this is how the invalid index comes to exist.
+    }
+
+    expect(index('pallets_label_index')?->valid)->toBeTrue()
+        ->and(index('pallets_label_unique')?->valid)->toBeFalse();
 });
 
 it('leaves out the schemas the configuration ignores', function (): void {
