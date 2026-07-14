@@ -35,6 +35,23 @@ final class Cast
     }
 
     /**
+     * A list PostgreSQL flattened into a string for us, because PDO reports an
+     * int[] as the literal '{4242,4243}' and there is nothing useful to do with that.
+     *
+     * @return list<int>
+     */
+    public static function integers(mixed $value): array
+    {
+        $list = self::text($value);
+
+        if ($list === '') {
+            return [];
+        }
+
+        return array_map(intval(...), explode(',', $list));
+    }
+
+    /**
      * PostgreSQL leaves a timestamp null until the event has happened, which for
      * most tables in a young database means forever.
      */

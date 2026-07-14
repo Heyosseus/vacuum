@@ -38,7 +38,20 @@ abstract class TestCase extends Orchestra
         $app['config']->set('app.key', 'base64:'.base64_encode(str_pad('vacuum-testing', 32, '-key')));
 
         $app['config']->set('database.default', 'pgsql');
-        $app['config']->set('database.connections.pgsql', [
+        $app['config']->set('database.connections.pgsql', $this->connection());
+
+        // A second connection to the same database, so that a test can hold a
+        // session open and then look at it. A transaction sitting idle cannot be
+        // observed down the connection that is holding it.
+        $app['config']->set('database.connections.pgsql_bystander', $this->connection());
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function connection(): array
+    {
+        return [
             'driver' => 'pgsql',
             'host' => $this->fromEnvironment('DB_HOST', '127.0.0.1'),
             'port' => $this->fromEnvironment('DB_PORT', '5432'),
@@ -48,7 +61,7 @@ abstract class TestCase extends Orchestra
             'charset' => 'utf8',
             'search_path' => 'public',
             'sslmode' => 'prefer',
-        ]);
+        ];
     }
 
     /**

@@ -12,17 +12,22 @@ use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Inspections\BloatInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\CacheInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\IndexInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\SessionInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\TableInspection;
+use Heyosseus\Vacuum\Advisor\Rules\BlockedSession;
 use Heyosseus\Vacuum\Advisor\Rules\CacheHitRatio;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
+use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
 use Heyosseus\Vacuum\Advisor\Rules\UnusedIndex;
+use Heyosseus\Vacuum\Advisor\SessionRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
 use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
+use Heyosseus\Vacuum\Queries\Sessions;
 use Heyosseus\Vacuum\Queries\TableStatistics;
 use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\Capabilities;
@@ -45,6 +50,9 @@ final class VacuumServiceProvider extends ServiceProvider
 
     /** The same, for a rule that judges how much reading went to disk. */
     public const string CACHE_RULES = 'vacuum.cache-rules';
+
+    /** The same, for a rule that judges what a connection is doing. */
+    public const string SESSION_RULES = 'vacuum.session-rules';
 
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
@@ -73,6 +81,7 @@ final class VacuumServiceProvider extends ServiceProvider
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
         $this->app->tag([UnusedIndex::class], self::INDEX_RULES);
         $this->app->tag([CacheHitRatio::class], self::CACHE_RULES);
+        $this->app->tag([IdleInTransaction::class, BlockedSession::class], self::SESSION_RULES);
 
         $this->app->bind(TableInspection::class, fn (Application $app): TableInspection => new TableInspection(
             $app->make(TableStatistics::class),
@@ -95,11 +104,18 @@ final class VacuumServiceProvider extends ServiceProvider
             $this->rules($app, self::CACHE_RULES, CacheRule::class),
         ));
 
+        $this->app->bind(SessionInspection::class, fn (Application $app): SessionInspection => new SessionInspection(
+            $app->make(Capabilities::class),
+            $app->make(Sessions::class),
+            $this->rules($app, self::SESSION_RULES, SessionRule::class),
+        ));
+
         $this->app->tag([
             TableInspection::class,
             BloatInspection::class,
             IndexInspection::class,
             CacheInspection::class,
+            SessionInspection::class,
         ], self::INSPECTIONS);
 
         $this->app->bind(Advisor::class, function (Application $app): Advisor {

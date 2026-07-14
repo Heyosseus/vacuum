@@ -28,6 +28,13 @@ it('reads a boolean whichever way postgres spelled it', function (): void {
         ->and(Cast::boolean(null))->toBeFalse();
 });
 
+it('reads the list postgres flattened into a string', function (): void {
+    expect(Cast::integers('4242,4243'))->toBe([4_242, 4_243])
+        ->and(Cast::integers('4242'))->toBe([4_242])
+        ->and(Cast::integers(''))->toBe([])
+        ->and(Cast::integers(null))->toBe([]);
+});
+
 it('reads a timestamp, and reads nothing at all as never', function (): void {
     expect(Cast::timestamp('2026-07-13 09:30:00'))
         ->toEqual(CarbonImmutable::parse('2026-07-13 09:30:00'))
