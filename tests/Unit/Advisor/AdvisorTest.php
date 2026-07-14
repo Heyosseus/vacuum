@@ -28,9 +28,9 @@ function subject(string $name): TableStatistic
  */
 function alwaysFires(string $rule, Severity $severity): TableRule
 {
-    return new class($rule, $severity) implements TableRule
+    return new readonly class($rule, $severity) implements TableRule
     {
-        public function __construct(private readonly string $rule, private readonly Severity $severity) {}
+        public function __construct(private string $rule, private Severity $severity) {}
 
         public function inspect(TableStatistic $table): Finding
         {

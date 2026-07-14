@@ -9,6 +9,7 @@ use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 final class VacuumServiceProvider extends ServiceProvider
 {
@@ -17,9 +18,10 @@ final class VacuumServiceProvider extends ServiceProvider
     /**
      * Register the package's services into the container.
      */
+    #[Override]
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/vacuum.php', 'vacuum');
+        $this->mergeConfigFrom(__DIR__.'/../config/vacuum.php', 'vacuum');
 
         $this->app->tag([DeadTuples::class], self::TABLE_RULES);
 
@@ -43,7 +45,7 @@ final class VacuumServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__ . '/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
+                __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
             ], 'vacuum-config');
         }
     }
