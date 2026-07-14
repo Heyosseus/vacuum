@@ -81,6 +81,7 @@ return [
 
     'thresholds' => [
         'dead_tuple_ratio' => 0.20,
+        'dead_tuple_minimum' => 1_000,
         'cache_hit_ratio' => 0.99,
         'bloat_bytes' => 100 * 1024 * 1024,
         'unused_index_min_size' => 1024 * 1024,
