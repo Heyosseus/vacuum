@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Heyosseus\Vacuum\Tests;
 
+use Heyosseus\Vacuum\Vacuum;
 use Heyosseus\Vacuum\VacuumServiceProvider;
 use Illuminate\Foundation\Application;
 use Orchestra\Testbench\TestCase as Orchestra;
@@ -31,6 +32,11 @@ abstract class TestCase extends Orchestra
      */
     protected function defineEnvironment($app): void
     {
+        // The dashboard runs behind the 'web' middleware group, which encrypts
+        // cookies, which needs a key. Nothing here is a secret.
+        // AES-256 wants exactly 32 bytes.
+        $app['config']->set('app.key', 'base64:'.base64_encode(str_pad('vacuum-testing', 32, '-key')));
+
         $app['config']->set('database.default', 'pgsql');
         $app['config']->set('database.connections.pgsql', [
             'driver' => 'pgsql',
@@ -43,6 +49,17 @@ abstract class TestCase extends Orchestra
             'search_path' => 'public',
             'sslmode' => 'prefer',
         ]);
+    }
+
+    /**
+     * The authorization callback is static, so it outlives the application the
+     * test booted it into. Left behind, it would authorize the next test.
+     */
+    protected function tearDown(): void
+    {
+        Vacuum::auth(null);
+
+        parent::tearDown();
     }
 
     private function fromEnvironment(string $key, string $default): string

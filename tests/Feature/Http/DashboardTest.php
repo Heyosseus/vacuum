@@ -1,0 +1,54 @@
+<?php
+
+declare(strict_types=1);
+
+use Heyosseus\Vacuum\Vacuum;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+it('turns a request away when nobody has said it may look', function (): void {
+    // The default gate opens only in local, and the test suite is not local.
+    $this->get('/vacuum')->assertForbidden();
+});
+
+it('answers a request the application has authorized', function (): void {
+    Vacuum::auth(static fn (Request $request): bool => true);
+
+    $this->get('/vacuum')
+        ->assertOk()
+        ->assertJsonStructure(['findings']);
+});
+
+it('lets the application refuse a request of its own accord', function (): void {
+    Vacuum::auth(static fn (Request $request): bool => $request->query('key') === 'let-me-in');
+
+    $this->get('/vacuum')->assertForbidden();
+    $this->get('/vacuum?key=let-me-in')->assertOk();
+});
+
+it('forgets an authorization callback between requests of different tests', function (): void {
+    // Guards the static: a callback left behind by the test above would open
+    // this one, and every test after it, without anybody noticing.
+    $this->get('/vacuum')->assertForbidden();
+});
+
+it('reports what the advisor found on the database it is pointed at', function (): void {
+    // The whole chain, end to end: pg_stat_user_tables, through the rules, out
+    // as JSON. A structural assertion on an empty database would pass even if
+    // the advisor were never asked.
+    DB::statement('DROP TABLE IF EXISTS gadgets');
+    DB::statement('CREATE TABLE gadgets (id serial PRIMARY KEY)');
+    DB::insert('INSERT INTO gadgets SELECT generate_series(1, 5000)');
+    DB::delete('DELETE FROM gadgets');
+    DB::statement('SELECT pg_stat_force_next_flush()');
+
+    Vacuum::auth(static fn (Request $request): bool => true);
+
+    $findings = $this->get('/vacuum')->json('findings');
+
+    expect($findings)->toBeArray()
+        ->and(array_column($findings, 'rule'))->toContain('dead-tuples')
+        ->and(array_column($findings, 'remediation'))->toContain('VACUUM ANALYZE "public"."gadgets";');
+
+    DB::statement('DROP TABLE IF EXISTS gadgets');
+});

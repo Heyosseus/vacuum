@@ -37,8 +37,15 @@ return [
     |--------------------------------------------------------------------------
     |
     | The URI prefix the dashboard is served from, and the middleware stack it
-    | is wrapped in. The 'vacuum' middleware alias resolves to an authorization
-    | gate; see the Gate section below.
+    | is wrapped in. Vacuum appends its own authorization middleware to whatever
+    | you list here, so the dashboard cannot be exposed by emptying this array.
+    |
+    | Authorization itself is a callback, registered from a service provider:
+    |
+    |     Vacuum::auth(fn (Request $request) => $request->user()?->isAdmin());
+    |
+    | Register nothing and Vacuum opens in local and refuses everywhere else. A
+    | forgotten configuration should lock the door, not leave it open.
     |
     */
 

@@ -7,9 +7,12 @@ namespace Heyosseus\Vacuum;
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\TableRule;
+use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
 use Heyosseus\Vacuum\Values\Capabilities;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Override;
 
@@ -52,10 +55,60 @@ final class VacuumServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->registerRoutes();
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
             ], 'vacuum-config');
         }
+    }
+
+    /**
+     * The master switch is read here, at boot, rather than in the middleware:
+     * a disabled Vacuum should have no routes to reach at all, not routes that
+     * turn people away.
+     */
+    private function registerRoutes(): void
+    {
+        $config = $this->app->make(Repository::class);
+
+        if (! (bool) $config->get('vacuum.enabled', true)) {
+            return;
+        }
+
+        Route::group([
+            'domain' => $config->get('vacuum.domain'),
+            'prefix' => $config->get('vacuum.path', 'vacuum'),
+            'middleware' => $this->middleware($config),
+        ], function (): void {
+            $this->loadRoutesFrom(__DIR__.'/../routes/vacuum.php');
+        });
+    }
+
+    /**
+     * The application's stack, with Vacuum's own door at the end of it. Authorize
+     * is appended rather than configured so that it cannot be removed by
+     * emptying the middleware array.
+     *
+     * @return list<string>
+     */
+    private function middleware(Repository $config): array
+    {
+        $configured = $config->get('vacuum.middleware', []);
+
+        $stack = [];
+
+        if (is_array($configured)) {
+            foreach ($configured as $middleware) {
+                if (is_string($middleware)) {
+                    $stack[] = $middleware;
+                }
+            }
+        }
+
+        $stack[] = Authorize::class;
+
+        return $stack;
     }
 }
