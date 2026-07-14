@@ -6,8 +6,8 @@ namespace Heyosseus\Vacuum\Queries;
 
 use Heyosseus\Vacuum\Database\ReadOnlyExecutor;
 use Heyosseus\Vacuum\Support\Cast;
+use Heyosseus\Vacuum\Support\IgnoredSchemas;
 use Heyosseus\Vacuum\Values\TableStatistic;
-use Illuminate\Contracts\Config\Repository;
 
 /**
  * Reads pg_stat_user_tables, the view PostgreSQL keeps of how each table has
@@ -17,7 +17,7 @@ final readonly class TableStatistics
 {
     public function __construct(
         private ReadOnlyExecutor $executor,
-        private Repository $config,
+        private IgnoredSchemas $ignored,
     ) {}
 
     /**
@@ -27,7 +27,7 @@ final readonly class TableStatistics
      */
     public function all(): array
     {
-        $ignored = $this->ignoredSchemas();
+        $ignored = $this->ignored->all();
 
         $sql = <<<'SQL'
             SELECT
@@ -72,27 +72,5 @@ final readonly class TableStatistics
             lastAnalyze: Cast::timestamp($row['last_analyze']),
             lastAutoanalyze: Cast::timestamp($row['last_autoanalyze']),
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function ignoredSchemas(): array
-    {
-        $ignored = $this->config->get('vacuum.ignored_schemas', []);
-
-        if (! is_array($ignored)) {
-            return [];
-        }
-
-        $schemas = [];
-
-        foreach ($ignored as $schema) {
-            if (is_string($schema)) {
-                $schemas[] = $schema;
-            }
-        }
-
-        return $schemas;
     }
 }
