@@ -12,6 +12,7 @@ It shows you that statement. It never runs it.
 
 | Rule | Finds |
 | --- | --- |
+| `wraparound` | Tables nothing has frozen, on their way to shutting the database down |
 | `dead-tuples` | Tables carrying more deleted-but-unreclaimed rows than they should |
 | `table-bloat` | Tables whose files are much larger than the rows inside them |
 | `unused-index` | Large indexes no query has ever read |
@@ -21,6 +22,8 @@ It shows you that statement. It never runs it.
 | `slow-statement` | The shapes of query that cost the most per run |
 
 Every finding carries a severity, what the problem costs you, and — where a single statement would fix it — the SQL to run. Findings roll up into a health score out of 100, which is computed *from the findings themselves*, so the grade can never disagree with the list beneath it.
+
+Six of those rules describe a database that is slower than it could be. `wraparound` describes one that **stops**: PostgreSQL counts transactions in 32 bits, and a table nothing freezes drags the whole cluster toward the end of that count, at which point the server refuses every write until it is shut down and vacuumed in single-user mode. It gives no warning of its own, and it does not slow down first.
 
 ## Requirements
 
@@ -113,6 +116,8 @@ Every rule reads its limits from `config/vacuum.php`. The defaults are set for a
     'dead_tuple_minimum' => 1_000,
     'cache_hit_ratio' => 0.99,
     'cache_hit_minimum_blocks' => 100_000,
+    'wraparound_xid_age' => 200_000_000,          // match your autovacuum_freeze_max_age
+    'wraparound_xid_age_critical' => 1_000_000_000,
     'bloat_bytes' => 100 * 1024 * 1024,
     'unused_index_min_size' => 1024 * 1024,
     'long_running_query_seconds' => 60,

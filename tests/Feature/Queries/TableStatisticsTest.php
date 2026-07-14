@@ -75,6 +75,27 @@ it('counts the modifications made since the last analyze', function (): void {
     expect(widgets()->modificationsSinceAnalyze)->toBe(3);
 });
 
+it('reports how far a table has fallen behind the transaction horizon', function (): void {
+    flushStatistics();
+
+    // A table created moments ago is a few transactions old at most, and the
+    // point of the assertion is that PostgreSQL answered at all: an age of zero
+    // and a missing column are the same value once it has been cast.
+    expect(widgets()->xidAge)->toBeGreaterThanOrEqual(0)
+        ->and(widgets()->xidAge)->toBeLessThan(TableStatistic::TRANSACTION_BUDGET)
+        ->and(widgets()->transactionBudgetSpent())->toBeLessThan(0.01);
+});
+
+it('freezes a table back to the present when it is vacuumed', function (): void {
+    DB::statement('VACUUM (FREEZE) widgets');
+    flushStatistics();
+
+    // Whatever the cluster's age is, this table is now at the front of it.
+    $horizon = DB::scalar('SELECT age(datfrozenxid) FROM pg_database WHERE datname = current_database()');
+
+    expect(widgets()->xidAge)->toBeLessThanOrEqual((int) $horizon);
+});
+
 it('inspects every schema when the ignore list is not a list at all', function (): void {
     flushStatistics();
 

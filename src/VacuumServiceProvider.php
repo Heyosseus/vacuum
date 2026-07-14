@@ -22,6 +22,7 @@ use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
 use Heyosseus\Vacuum\Advisor\Rules\UnusedIndex;
+use Heyosseus\Vacuum\Advisor\Rules\Wraparound;
 use Heyosseus\Vacuum\Advisor\SessionRule;
 use Heyosseus\Vacuum\Advisor\StatementRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
@@ -84,7 +85,7 @@ final class VacuumServiceProvider extends ServiceProvider
             static fn (Application $app): Capabilities => $app->make(ServerCapabilities::class)->probe(),
         );
 
-        $this->app->tag([DeadTuples::class], self::TABLE_RULES);
+        $this->app->tag([DeadTuples::class, Wraparound::class], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
         $this->app->tag([UnusedIndex::class], self::INDEX_RULES);
         $this->app->tag([CacheHitRatio::class], self::CACHE_RULES);

@@ -12,12 +12,26 @@ use Carbon\CarbonImmutable;
  */
 final readonly class TableStatistic
 {
+    /**
+     * PostgreSQL numbers transactions in 32 bits, half of which are the past and
+     * half the future, so a table may fall this far behind the present before the
+     * server refuses to accept another write.
+     */
+    public const int TRANSACTION_BUDGET = 2_147_483_647;
+
+    /**
+     * @param  int  $xidAge  Transactions elapsed since this table's oldest row was
+     *                       frozen. It falls to nearly zero when the table is
+     *                       vacuumed and climbs with every transaction the cluster
+     *                       runs, whether this table was touched or not.
+     */
     public function __construct(
         public string $schema,
         public string $name,
         public int $liveTuples,
         public int $deadTuples,
         public int $modificationsSinceAnalyze,
+        public int $xidAge,
         public ?CarbonImmutable $lastVacuum,
         public ?CarbonImmutable $lastAutovacuum,
         public ?CarbonImmutable $lastAnalyze,
@@ -27,6 +41,15 @@ final readonly class TableStatistic
     public function qualifiedName(): string
     {
         return "{$this->schema}.{$this->name}";
+    }
+
+    /**
+     * How much of the cluster's transaction budget this table has spent, as a
+     * share. At 1.0 the database stops accepting writes.
+     */
+    public function transactionBudgetSpent(): float
+    {
+        return $this->xidAge / self::TRANSACTION_BUDGET;
     }
 
     /**

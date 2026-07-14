@@ -100,6 +100,15 @@ return [
         // any hit ratio at all, and none of them mean anything.
         'cache_hit_minimum_blocks' => 100_000,
 
+        // Transactions a table may fall behind the present before Vacuum says so.
+        // PostgreSQL's own autovacuum_freeze_max_age defaults to 200 million, the
+        // age at which it freezes a table whether or not anything has written to
+        // it; raise this to match if you have raised that. The critical age is
+        // roughly half of the 2.1 billion the server can count before it refuses
+        // to accept another write.
+        'wraparound_xid_age' => 200_000_000,
+        'wraparound_xid_age_critical' => 1_000_000_000,
+
         'bloat_bytes' => 100 * 1024 * 1024,
         'unused_index_min_size' => 1024 * 1024,
         'long_running_query_seconds' => 60,
