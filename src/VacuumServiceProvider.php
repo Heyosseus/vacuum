@@ -202,12 +202,21 @@ final class VacuumServiceProvider extends ServiceProvider
             return;
         }
 
+        // The console is off unless the application asks for it, and off means the
+        // route is not there. A console that merely refuses to run things needs
+        // only one bug to run them.
+        $console = (bool) $config->get('vacuum.console.enabled', false);
+
         Route::group([
             'domain' => $config->get('vacuum.domain'),
             'prefix' => $config->get('vacuum.path', 'vacuum'),
             'middleware' => $this->middleware($config),
-        ], function (): void {
+        ], function () use ($console): void {
             $this->loadRoutesFrom(__DIR__.'/../routes/vacuum.php');
+
+            if ($console) {
+                $this->loadRoutesFrom(__DIR__.'/../routes/console.php');
+            }
         });
     }
 

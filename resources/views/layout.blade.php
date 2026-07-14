@@ -120,6 +120,57 @@
 
         .evidence { color: var(--muted); white-space: pre-wrap; }
 
+        nav { display: flex; gap: 1rem; font-size: 0.875rem; }
+        nav a { color: var(--muted); text-decoration: none; }
+        nav a:hover, nav a[aria-current] { color: var(--ink); }
+
+        .console textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel);
+            color: var(--ink);
+            font: 0.875rem/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+            resize: vertical;
+        }
+        .console__foot { display: flex; align-items: center; gap: 1rem; margin-top: 0.625rem; }
+        .console__note { margin: 0; font-size: 0.75rem; color: var(--muted); }
+        .console button {
+            margin-left: auto;
+            padding: 0.4375rem 1.125rem;
+            border: 1px solid var(--line);
+            border-radius: 5px;
+            background: var(--ink);
+            color: var(--bg);
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .error {
+            margin-top: 1rem;
+            padding: 0.75rem 0.875rem;
+            border: 1px solid var(--critical);
+            border-radius: 5px;
+            color: var(--critical);
+            font: 0.8125rem/1.5 ui-monospace, Menlo, monospace;
+            white-space: pre-wrap;
+        }
+
+        .result__meta { color: var(--muted); font-size: 0.8125rem; }
+        .result { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+        table { border-collapse: collapse; width: 100%; font-size: 0.8125rem; }
+        th, td {
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--line);
+            font-family: ui-monospace, Menlo, monospace;
+            white-space: nowrap;
+        }
+        th { color: var(--muted); font-weight: 600; }
+        tbody tr:last-child td { border-bottom: 0; }
+
         .empty {
             background: var(--panel);
             border: 1px solid var(--line);
@@ -134,6 +185,15 @@
 <div class="wrap">
     <header>
         <h1>Vacuum</h1>
+
+        <nav>
+            <a href="{{ route('vacuum.dashboard') }}">Findings</a>
+
+            @if (Route::has('vacuum.console'))
+                <a href="{{ route('vacuum.console') }}">Console</a>
+            @endif
+        </nav>
+
         <p>PostgreSQL {{ $capabilities->majorVersion() }} &middot; {{ $connection }}</p>
     </header>
 

@@ -74,6 +74,11 @@ return [
         'enabled' => env('VACUUM_CONSOLE_ENABLED', false),
         'timeout' => env('VACUUM_CONSOLE_TIMEOUT', 5_000),
         'max_rows' => env('VACUUM_CONSOLE_MAX_ROWS', 500),
+
+        // EXPLAIN ANALYZE actually runs the query it is explaining. The read-only
+        // transaction still stops it writing, but nothing stops it reading a
+        // billion rows, so it is off until you say otherwise.
+        'explain_analyze' => env('VACUUM_CONSOLE_EXPLAIN_ANALYZE', false),
     ],
 
     /*
