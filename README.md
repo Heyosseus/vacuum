@@ -13,7 +13,9 @@ It shows you that statement. It never runs it.
 | Rule | Finds |
 | --- | --- |
 | `wraparound` | Tables nothing has frozen, on their way to shutting the database down |
+| `autovacuum-disabled` | A server with autovacuum switched off and left off |
 | `dead-tuples` | Tables carrying more deleted-but-unreclaimed rows than they should |
+| `stale-statistics` | Tables the planner is reasoning about from numbers that are no longer true |
 | `table-bloat` | Tables whose files are much larger than the rows inside them |
 | `unused-index` | Large indexes no query has ever read |
 | `cache-hit-ratio` | A database going to disk more often than it should |
@@ -118,6 +120,9 @@ Every rule reads its limits from `config/vacuum.php`. The defaults are set for a
     'cache_hit_minimum_blocks' => 100_000,
     'wraparound_xid_age' => 200_000_000,          // match your autovacuum_freeze_max_age
     'wraparound_xid_age_critical' => 1_000_000_000,
+    'stale_statistics_ratio' => 0.20,             // autoanalyze fires at 0.10
+    'stale_statistics_minimum' => 10_000,
+    'stale_statistics_minimum_rows' => 1_000,
     'bloat_bytes' => 100 * 1024 * 1024,
     'unused_index_min_size' => 1024 * 1024,
     'long_running_query_seconds' => 60,
@@ -162,7 +167,7 @@ use Heyosseus\Vacuum\VacuumServiceProvider;
 $this->app->tag([NeverAnalyzed::class], VacuumServiceProvider::TABLE_RULES);
 ```
 
-There is a tag per subject — `TABLE_RULES`, `BLOAT_RULES`, `INDEX_RULES`, `CACHE_RULES`, `SESSION_RULES`, `STATEMENT_RULES` — because a rule should be given the one thing it reasons about, and adding a rule should never widen what has to be queried before it can run.
+There is a tag per subject — `TABLE_RULES`, `BLOAT_RULES`, `INDEX_RULES`, `CACHE_RULES`, `SESSION_RULES`, `STATEMENT_RULES`, `SETTING_RULES` — because a rule should be given the one thing it reasons about, and adding a rule should never widen what has to be queried before it can run.
 
 ## Restyling the dashboard
 

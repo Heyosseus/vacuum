@@ -100,6 +100,14 @@ return [
         // any hit ratio at all, and none of them mean anything.
         'cache_hit_minimum_blocks' => 100_000,
 
+        // Rows written since the last analyze, as a share of the rows the table
+        // holds. Autoanalyze fires at 0.1, so 0.2 is the point at which it is
+        // being outrun rather than merely working. The minimums keep the rule off
+        // tables too small or too quiet for a bad row estimate to cost anything.
+        'stale_statistics_ratio' => 0.20,
+        'stale_statistics_minimum' => 10_000,
+        'stale_statistics_minimum_rows' => 1_000,
+
         // Transactions a table may fall behind the present before Vacuum says so.
         // PostgreSQL's own autovacuum_freeze_max_age defaults to 200 million, the
         // age at which it freezes a table whether or not anything has written to

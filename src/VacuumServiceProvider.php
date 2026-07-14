@@ -13,17 +13,21 @@ use Heyosseus\Vacuum\Advisor\Inspections\BloatInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\CacheInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\IndexInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SessionInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\SettingInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\StatementInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\TableInspection;
+use Heyosseus\Vacuum\Advisor\Rules\AutovacuumDisabled;
 use Heyosseus\Vacuum\Advisor\Rules\BlockedSession;
 use Heyosseus\Vacuum\Advisor\Rules\CacheHitRatio;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
+use Heyosseus\Vacuum\Advisor\Rules\StaleStatistics;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
 use Heyosseus\Vacuum\Advisor\Rules\UnusedIndex;
 use Heyosseus\Vacuum\Advisor\Rules\Wraparound;
 use Heyosseus\Vacuum\Advisor\SessionRule;
+use Heyosseus\Vacuum\Advisor\SettingRule;
 use Heyosseus\Vacuum\Advisor\StatementRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
@@ -62,6 +66,9 @@ final class VacuumServiceProvider extends ServiceProvider
     /** The same, for a rule that judges a query pg_stat_statements has watched. */
     public const string STATEMENT_RULES = 'vacuum.statement-rules';
 
+    /** The same, for a rule that judges how the server itself is configured. */
+    public const string SETTING_RULES = 'vacuum.setting-rules';
+
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
 
@@ -85,12 +92,13 @@ final class VacuumServiceProvider extends ServiceProvider
             static fn (Application $app): Capabilities => $app->make(ServerCapabilities::class)->probe(),
         );
 
-        $this->app->tag([DeadTuples::class, Wraparound::class], self::TABLE_RULES);
+        $this->app->tag([DeadTuples::class, StaleStatistics::class, Wraparound::class], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
         $this->app->tag([UnusedIndex::class], self::INDEX_RULES);
         $this->app->tag([CacheHitRatio::class], self::CACHE_RULES);
         $this->app->tag([IdleInTransaction::class, BlockedSession::class], self::SESSION_RULES);
         $this->app->tag([SlowStatement::class], self::STATEMENT_RULES);
+        $this->app->tag([AutovacuumDisabled::class], self::SETTING_RULES);
 
         $this->app->bind(TableInspection::class, fn (Application $app): TableInspection => new TableInspection(
             $app->make(TableStatistics::class),
@@ -125,6 +133,11 @@ final class VacuumServiceProvider extends ServiceProvider
             $this->rules($app, self::STATEMENT_RULES, StatementRule::class),
         ));
 
+        $this->app->bind(SettingInspection::class, fn (Application $app): SettingInspection => new SettingInspection(
+            $app->make(Capabilities::class),
+            $this->rules($app, self::SETTING_RULES, SettingRule::class),
+        ));
+
         $this->app->tag([
             TableInspection::class,
             BloatInspection::class,
@@ -132,6 +145,7 @@ final class VacuumServiceProvider extends ServiceProvider
             CacheInspection::class,
             SessionInspection::class,
             StatementInspection::class,
+            SettingInspection::class,
         ], self::INSPECTIONS);
 
         $this->app->bind(Advisor::class, function (Application $app): Advisor {
