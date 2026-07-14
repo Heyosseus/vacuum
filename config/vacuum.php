@@ -90,6 +90,11 @@ return [
         'dead_tuple_ratio' => 0.20,
         'dead_tuple_minimum' => 1_000,
         'cache_hit_ratio' => 0.99,
+
+        // A database that has served a hundred blocks since it started can have
+        // any hit ratio at all, and none of them mean anything.
+        'cache_hit_minimum_blocks' => 100_000,
+
         'bloat_bytes' => 100 * 1024 * 1024,
         'unused_index_min_size' => 1024 * 1024,
         'long_running_query_seconds' => 60,
