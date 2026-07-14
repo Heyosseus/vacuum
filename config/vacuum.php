@@ -98,6 +98,7 @@ return [
         'bloat_bytes' => 100 * 1024 * 1024,
         'unused_index_min_size' => 1024 * 1024,
         'long_running_query_seconds' => 60,
+        'slow_query_milliseconds' => 500,
         'idle_in_transaction_seconds' => 300,
     ],
 

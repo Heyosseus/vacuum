@@ -30,6 +30,11 @@
             </div>
 
             <p class="finding__summary">{{ $finding->summary }}</p>
+
+            @if ($finding->evidence !== null)
+                <pre class="evidence">{{ $finding->evidence }}</pre>
+            @endif
+
             <p class="finding__impact">{{ $finding->impact }}</p>
 
             @if ($finding->remediation !== null)

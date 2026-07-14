@@ -118,6 +118,8 @@
         .working { font-size: 0.8125rem; color: var(--muted); }
         .working code { font-family: ui-monospace, Menlo, monospace; }
 
+        .evidence { color: var(--muted); white-space: pre-wrap; }
+
         .empty {
             background: var(--panel);
             border: 1px solid var(--line);

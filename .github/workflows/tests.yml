@@ -21,24 +21,27 @@ jobs:
 
     name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: vacuum_test
-          POSTGRES_USER: vacuum
-          POSTGRES_PASSWORD: secret
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # Started by hand rather than as a service container: pg_stat_statements is
+      # loaded at startup, and a service container cannot be given command
+      # arguments. The version matches the one Vacuum is developed against, so that
+      # a catalog which moved between releases is caught here rather than by a user.
+      - name: Start PostgreSQL
+        run: |
+          docker run --detach --name postgres \
+            --publish 5432:5432 \
+            --env POSTGRES_DB=vacuum_test \
+            --env POSTGRES_USER=vacuum \
+            --env POSTGRES_PASSWORD=secret \
+            postgres:17 -c shared_preload_libraries=pg_stat_statements
+
+          until docker exec postgres pg_isready --username vacuum --quiet; do sleep 1; done
+
+          docker exec postgres psql --username vacuum --dbname vacuum_test \
+            --command 'CREATE EXTENSION pg_stat_statements'
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2

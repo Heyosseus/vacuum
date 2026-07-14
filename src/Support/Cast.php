@@ -25,6 +25,11 @@ final class Cast
         return is_numeric($value) ? (int) $value : 0;
     }
 
+    public static function decimal(mixed $value): float
+    {
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
     /**
      * PostgreSQL booleans arrive as a native bool or as the letter they are
      * stored under, so both spellings have to mean the same thing.
