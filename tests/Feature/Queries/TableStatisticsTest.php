@@ -1,0 +1,96 @@
+<?php
+
+declare(strict_types=1);
+
+use Heyosseus\Vacuum\Queries\TableStatistics;
+use Heyosseus\Vacuum\Values\TableStatistic;
+use Illuminate\Support\Facades\DB;
+
+beforeEach(function (): void {
+    DB::statement('DROP TABLE IF EXISTS widgets');
+    DB::statement('CREATE TABLE widgets (id serial PRIMARY KEY, name text)');
+});
+
+afterEach(function (): void {
+    DB::statement('DROP TABLE IF EXISTS widgets');
+    DB::statement('DROP SCHEMA IF EXISTS archive CASCADE');
+});
+
+/**
+ * PostgreSQL accumulates statistics in each backend and flushes them to shared
+ * memory at its own pace, so a test that reads them straight after a write sees
+ * nothing. pg_stat_force_next_flush makes the pending counters visible now.
+ */
+function flushStatistics(): void
+{
+    DB::statement('SELECT pg_stat_force_next_flush()');
+}
+
+function widgets(): TableStatistic
+{
+    $table = collect(app(TableStatistics::class)->all())
+        ->firstWhere(fn (TableStatistic $table): bool => $table->name === 'widgets');
+
+    expect($table)->not->toBeNull();
+
+    return $table;
+}
+
+it('counts the rows a table currently holds', function (): void {
+    DB::insert("INSERT INTO widgets (name) SELECT 'widget ' || i FROM generate_series(1, 10) i");
+    flushStatistics();
+
+    expect(widgets()->liveTuples)->toBe(10)
+        ->and(widgets()->deadTuples)->toBe(0);
+});
+
+it('counts the dead tuples a delete leaves behind', function (): void {
+    DB::insert("INSERT INTO widgets (name) SELECT 'widget ' || i FROM generate_series(1, 10) i");
+    DB::delete('DELETE FROM widgets WHERE id <= 4');
+    flushStatistics();
+
+    expect(widgets()->deadTuples)->toBe(4)
+        ->and(widgets()->liveTuples)->toBe(6)
+        ->and(widgets()->deadTupleRatio())->toBe(0.4);
+});
+
+it('reports a table that has never been vacuumed', function (): void {
+    flushStatistics();
+
+    expect(widgets()->lastVacuumedAt())->toBeNull();
+});
+
+it('reports when a table was last vacuumed', function (): void {
+    DB::statement('VACUUM widgets');
+    flushStatistics();
+
+    expect(widgets()->lastVacuumedAt())->not->toBeNull();
+});
+
+it('counts the modifications made since the last analyze', function (): void {
+    DB::statement('ANALYZE widgets');
+    DB::insert("INSERT INTO widgets (name) SELECT 'widget ' || i FROM generate_series(1, 3) i");
+    flushStatistics();
+
+    expect(widgets()->modificationsSinceAnalyze)->toBe(3);
+});
+
+it('inspects every schema when the ignore list is not a list at all', function (): void {
+    flushStatistics();
+
+    config()->set('vacuum.ignored_schemas', 'public');
+
+    expect(widgets()->schema)->toBe('public');
+});
+
+it('leaves out the schemas the configuration ignores', function (): void {
+    DB::statement('CREATE SCHEMA archive');
+    DB::statement('CREATE TABLE archive.widgets (id serial PRIMARY KEY)');
+    flushStatistics();
+
+    config()->set('vacuum.ignored_schemas', ['pg_catalog', 'information_schema', 'pg_toast', 'archive']);
+
+    $schemas = collect(app(TableStatistics::class)->all())->pluck('schema')->unique();
+
+    expect($schemas)->not->toContain('archive');
+});

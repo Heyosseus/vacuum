@@ -4,6 +4,7 @@
 /docs
 /.phpunit.cache
 /.pest
+phpunit.xml
 composer.lock
 package-lock.json
 .phpunit.result.cache
