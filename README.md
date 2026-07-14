@@ -18,6 +18,8 @@ It shows you that statement. It never runs it.
 | `stale-statistics` | Tables the planner is reasoning about from numbers that are no longer true |
 | `table-bloat` | Tables whose files are much larger than the rows inside them |
 | `unused-index` | Large indexes no query has ever read |
+| `duplicate-index` | Indexes that are an exact copy of another index on the same table |
+| `invalid-index` | Indexes every write maintains and no query is allowed to use |
 | `cache-hit-ratio` | A database going to disk more often than it should |
 | `idle-in-transaction` | Transactions opened and then abandoned |
 | `blocked-session` | Sessions stuck waiting on somebody else's lock |
@@ -167,7 +169,7 @@ use Heyosseus\Vacuum\VacuumServiceProvider;
 $this->app->tag([NeverAnalyzed::class], VacuumServiceProvider::TABLE_RULES);
 ```
 
-There is a tag per subject — `TABLE_RULES`, `BLOAT_RULES`, `INDEX_RULES`, `CACHE_RULES`, `SESSION_RULES`, `STATEMENT_RULES`, `SETTING_RULES` — because a rule should be given the one thing it reasons about, and adding a rule should never widen what has to be queried before it can run.
+There is a tag per subject — `TABLE_RULES`, `BLOAT_RULES`, `INDEX_RULES`, `DUPLICATE_RULES`, `CACHE_RULES`, `SESSION_RULES`, `STATEMENT_RULES`, `SETTING_RULES` — because a rule should be given the one thing it reasons about, and adding a rule should never widen what has to be queried before it can run.
 
 ## Restyling the dashboard
 

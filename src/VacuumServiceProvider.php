@@ -7,10 +7,12 @@ namespace Heyosseus\Vacuum;
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\BloatRule;
 use Heyosseus\Vacuum\Advisor\CacheRule;
+use Heyosseus\Vacuum\Advisor\DuplicateRule;
 use Heyosseus\Vacuum\Advisor\IndexRule;
 use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Inspections\BloatInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\CacheInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\DuplicateInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\IndexInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SessionInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SettingInspection;
@@ -20,7 +22,9 @@ use Heyosseus\Vacuum\Advisor\Rules\AutovacuumDisabled;
 use Heyosseus\Vacuum\Advisor\Rules\BlockedSession;
 use Heyosseus\Vacuum\Advisor\Rules\CacheHitRatio;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
+use Heyosseus\Vacuum\Advisor\Rules\DuplicateIndex;
 use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
+use Heyosseus\Vacuum\Advisor\Rules\InvalidIndex;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
 use Heyosseus\Vacuum\Advisor\Rules\StaleStatistics;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
@@ -33,6 +37,7 @@ use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
+use Heyosseus\Vacuum\Queries\IndexDuplicates;
 use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
 use Heyosseus\Vacuum\Queries\Sessions;
@@ -56,6 +61,9 @@ final class VacuumServiceProvider extends ServiceProvider
 
     /** The same, for a rule that judges an index. */
     public const string INDEX_RULES = 'vacuum.index-rules';
+
+    /** The same, for a rule that judges an index against the one it copies. */
+    public const string DUPLICATE_RULES = 'vacuum.duplicate-rules';
 
     /** The same, for a rule that judges how much reading went to disk. */
     public const string CACHE_RULES = 'vacuum.cache-rules';
@@ -94,7 +102,8 @@ final class VacuumServiceProvider extends ServiceProvider
 
         $this->app->tag([DeadTuples::class, StaleStatistics::class, Wraparound::class], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
-        $this->app->tag([UnusedIndex::class], self::INDEX_RULES);
+        $this->app->tag([UnusedIndex::class, InvalidIndex::class], self::INDEX_RULES);
+        $this->app->tag([DuplicateIndex::class], self::DUPLICATE_RULES);
         $this->app->tag([CacheHitRatio::class], self::CACHE_RULES);
         $this->app->tag([IdleInTransaction::class, BlockedSession::class], self::SESSION_RULES);
         $this->app->tag([SlowStatement::class], self::STATEMENT_RULES);
@@ -113,6 +122,11 @@ final class VacuumServiceProvider extends ServiceProvider
         $this->app->bind(IndexInspection::class, fn (Application $app): IndexInspection => new IndexInspection(
             $app->make(IndexStatistics::class),
             $this->rules($app, self::INDEX_RULES, IndexRule::class),
+        ));
+
+        $this->app->bind(DuplicateInspection::class, fn (Application $app): DuplicateInspection => new DuplicateInspection(
+            $app->make(IndexDuplicates::class),
+            $this->rules($app, self::DUPLICATE_RULES, DuplicateRule::class),
         ));
 
         $this->app->bind(CacheInspection::class, fn (Application $app): CacheInspection => new CacheInspection(
@@ -142,6 +156,7 @@ final class VacuumServiceProvider extends ServiceProvider
             TableInspection::class,
             BloatInspection::class,
             IndexInspection::class,
+            DuplicateInspection::class,
             CacheInspection::class,
             SessionInspection::class,
             StatementInspection::class,
