@@ -4,38 +4,30 @@ declare(strict_types=1);
 
 namespace Heyosseus\Vacuum\Advisor;
 
-use Heyosseus\Vacuum\Values\TableStatistic;
-
 /**
- * Puts every registered rule to every table and collects what comes back.
+ * Everything the package believes is wrong with the database, worst first.
  *
- * The advisor judges statistics it is handed rather than fetching them itself:
- * a query class knows how to ask PostgreSQL a question, and the advisor knows
- * what the answer means. Keeping the two apart is what lets the rules be tested
- * without a database.
+ * The advisor knows nothing about tables, bloat, indexes or sessions. It merges
+ * what the inspections found and orders it by how much it matters, which is the
+ * only judgement it is qualified to make.
  */
 final readonly class Advisor
 {
     /**
-     * @param  iterable<TableRule>  $rules
+     * @param  iterable<Inspection>  $inspections
      */
-    public function __construct(private iterable $rules) {}
+    public function __construct(private iterable $inspections) {}
 
     /**
-     * @param  list<TableStatistic>  $tables
      * @return list<Finding>
      */
-    public function inspect(array $tables): array
+    public function findings(): array
     {
         $findings = [];
 
-        foreach ($tables as $table) {
-            foreach ($this->rules as $rule) {
-                $finding = $rule->inspect($table);
-
-                if ($finding instanceof Finding) {
-                    $findings[] = $finding;
-                }
+        foreach ($this->inspections as $inspection) {
+            foreach ($inspection->findings() as $finding) {
+                $findings[] = $finding;
             }
         }
 

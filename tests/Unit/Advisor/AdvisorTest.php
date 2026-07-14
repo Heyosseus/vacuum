@@ -4,92 +4,69 @@ declare(strict_types=1);
 
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\Finding;
+use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Severity;
-use Heyosseus\Vacuum\Advisor\TableRule;
-use Heyosseus\Vacuum\Values\TableStatistic;
 
-function subject(string $name): TableStatistic
+function finding(string $rule, Severity $severity): Finding
 {
-    return new TableStatistic(
-        schema: 'public',
-        name: $name,
-        liveTuples: 0,
-        deadTuples: 0,
-        modificationsSinceAnalyze: 0,
-        lastVacuum: null,
-        lastAutovacuum: null,
-        lastAnalyze: null,
-        lastAutoanalyze: null,
+    return new Finding(
+        rule: $rule,
+        subject: 'public.widgets',
+        severity: $severity,
+        summary: 'summary',
+        impact: 'impact',
     );
 }
 
 /**
- * A rule that always fires, at a severity of the test's choosing.
+ * @param  list<Finding>  $findings
  */
-function alwaysFires(string $rule, Severity $severity): TableRule
+function inspection(array $findings): Inspection
 {
-    return new readonly class($rule, $severity) implements TableRule
+    return new readonly class($findings) implements Inspection
     {
-        public function __construct(private string $rule, private Severity $severity) {}
+        /**
+         * @param  list<Finding>  $findings
+         */
+        public function __construct(private array $findings) {}
 
-        public function inspect(TableStatistic $table): Finding
+        /**
+         * @return list<Finding>
+         */
+        public function findings(): array
         {
-            return new Finding(
-                rule: $this->rule,
-                subject: $table->qualifiedName(),
-                severity: $this->severity,
-                summary: 'summary',
-                impact: 'impact',
-            );
+            return $this->findings;
         }
     };
 }
 
-function neverFires(): TableRule
-{
-    return new class implements TableRule
-    {
-        public function inspect(TableStatistic $table): ?Finding
-        {
-            return null;
-        }
-    };
-}
+it('has nothing to report when no inspection finds anything', function (): void {
+    $advisor = new Advisor([inspection([]), inspection([])]);
 
-it('has nothing to report when no rule fires', function (): void {
-    $advisor = new Advisor([neverFires(), neverFires()]);
-
-    expect($advisor->inspect([subject('widgets'), subject('gadgets')]))->toBe([]);
+    expect($advisor->findings())->toBe([]);
 });
 
-it('asks every rule about every table', function (): void {
+it('gathers what every inspection found', function (): void {
     $advisor = new Advisor([
-        alwaysFires('first', Severity::Warning),
-        alwaysFires('second', Severity::Warning),
+        inspection([finding('dead-tuples', Severity::Warning)]),
+        inspection([finding('table-bloat', Severity::Warning)]),
     ]);
 
-    $findings = $advisor->inspect([subject('widgets'), subject('gadgets')]);
-
-    expect($findings)->toHaveCount(4);
+    expect(array_column($advisor->findings(), 'rule'))->toBe(['dead-tuples', 'table-bloat']);
 });
 
-it('puts the findings that matter most first', function (): void {
+it('puts the findings that matter most first, whichever inspection made them', function (): void {
     $advisor = new Advisor([
-        alwaysFires('noted', Severity::Info),
-        alwaysFires('urgent', Severity::Critical),
-        alwaysFires('untidy', Severity::Warning),
+        inspection([finding('noted', Severity::Info)]),
+        inspection([finding('urgent', Severity::Critical)]),
+        inspection([finding('untidy', Severity::Warning)]),
     ]);
 
-    $findings = $advisor->inspect([subject('widgets')]);
-
-    expect(array_column($findings, 'rule'))->toBe(['urgent', 'untidy', 'noted']);
+    expect(array_column($advisor->findings(), 'rule'))->toBe(['urgent', 'untidy', 'noted']);
 });
 
-it('keeps a quiet rule from hiding a loud one', function (): void {
-    $advisor = new Advisor([neverFires(), alwaysFires('urgent', Severity::Critical)]);
+it('keeps a quiet inspection from hiding a loud one', function (): void {
+    $advisor = new Advisor([inspection([]), inspection([finding('urgent', Severity::Critical)])]);
 
-    $findings = $advisor->inspect([subject('widgets')]);
-
-    expect($findings)->toHaveCount(1)
-        ->and($findings[0]->rule)->toBe('urgent');
+    expect(array_column($advisor->findings(), 'rule'))->toBe(['urgent']);
 });

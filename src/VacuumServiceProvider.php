@@ -5,10 +5,17 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum;
 
 use Heyosseus\Vacuum\Advisor\Advisor;
+use Heyosseus\Vacuum\Advisor\BloatRule;
+use Heyosseus\Vacuum\Advisor\Inspection;
+use Heyosseus\Vacuum\Advisor\Inspections\BloatInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\TableInspection;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
+use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
+use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
+use Heyosseus\Vacuum\Queries\TableStatistics;
 use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Contracts\Config\Repository;
@@ -19,7 +26,14 @@ use Override;
 
 final class VacuumServiceProvider extends ServiceProvider
 {
+    /** Tag an application's own TableRule with this to have it inspected too. */
     public const string TABLE_RULES = 'vacuum.table-rules';
+
+    /** The same, for a rule that judges wasted space rather than dead tuples. */
+    public const string BLOAT_RULES = 'vacuum.bloat-rules';
+
+    /** A whole subject of its own: a query paired with the rules that judge it. */
+    public const string INSPECTIONS = 'vacuum.inspections';
 
     /**
      * Register the package's services into the container.
@@ -42,18 +56,54 @@ final class VacuumServiceProvider extends ServiceProvider
         );
 
         $this->app->tag([DeadTuples::class], self::TABLE_RULES);
+        $this->app->tag([TableBloat::class], self::BLOAT_RULES);
+
+        $this->app->bind(TableInspection::class, fn (Application $app): TableInspection => new TableInspection(
+            $app->make(TableStatistics::class),
+            $this->rules($app, self::TABLE_RULES, TableRule::class),
+        ));
+
+        $this->app->bind(BloatInspection::class, fn (Application $app): BloatInspection => new BloatInspection(
+            $app->make(BloatEstimates::class),
+            $this->rules($app, self::BLOAT_RULES, BloatRule::class),
+        ));
+
+        $this->app->tag([TableInspection::class, BloatInspection::class], self::INSPECTIONS);
 
         $this->app->bind(Advisor::class, function (Application $app): Advisor {
-            $rules = [];
+            $inspections = [];
 
-            foreach ($app->tagged(self::TABLE_RULES) as $rule) {
-                if ($rule instanceof TableRule) {
-                    $rules[] = $rule;
+            foreach ($app->tagged(self::INSPECTIONS) as $inspection) {
+                if ($inspection instanceof Inspection) {
+                    $inspections[] = $inspection;
                 }
             }
 
-            return new Advisor($rules);
+            return new Advisor($inspections);
         });
+    }
+
+    /**
+     * The rules an application has tagged, and only the ones the inspection can
+     * actually put a question to. The container types a tag as a bare iterable,
+     * so anything at all could be in it.
+     *
+     * @template TRule of object
+     *
+     * @param  class-string<TRule>  $contract
+     * @return list<TRule>
+     */
+    private function rules(Application $app, string $tag, string $contract): array
+    {
+        $rules = [];
+
+        foreach ($app->tagged($tag) as $rule) {
+            if ($rule instanceof $contract) {
+                $rules[] = $rule;
+            }
+        }
+
+        return $rules;
     }
 
     /**
