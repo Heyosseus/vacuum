@@ -29,6 +29,48 @@
         @endif
     </section>
 
+    @if ($vacuums !== [])
+        <h2>Vacuuming now</h2>
+
+        <div class="result">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>Phase</th>
+                        <th>Heap scanned</th>
+                        <th>Index passes</th>
+                        <th>Started by</th>
+                        <th>PID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($vacuums as $vacuum)
+                        <tr>
+                            <td>{{ $vacuum->qualifiedName() }}</td>
+                            <td>{{ $vacuum->phase }}</td>
+                            <td>
+                                @if ($vacuum->percentScanned() === null)
+                                    &mdash;
+                                @else
+                                    {{ $vacuum->percentScanned() }}%
+                                @endif
+                            </td>
+                            <td>
+                                {{ $vacuum->indexPasses }}
+                                @if ($vacuum->indexPasses > 1)
+                                    <span class="rule">maintenance_work_mem too small</span>
+                                @endif
+                            </td>
+                            <td>{{ $vacuum->automatic ? 'autovacuum' : 'a person' }}</td>
+                            <td>{{ $vacuum->pid }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     <h2>Findings</h2>
 
     @forelse ($findings as $finding)
