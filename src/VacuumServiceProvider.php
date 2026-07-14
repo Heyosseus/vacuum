@@ -34,6 +34,7 @@ use Heyosseus\Vacuum\Advisor\SessionRule;
 use Heyosseus\Vacuum\Advisor\SettingRule;
 use Heyosseus\Vacuum\Advisor\StatementRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
+use Heyosseus\Vacuum\Console\Commands\CheckCommand;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
@@ -209,6 +210,8 @@ final class VacuumServiceProvider extends ServiceProvider
         $this->registerRoutes();
 
         if ($this->app->runningInConsole()) {
+            $this->commands([CheckCommand::class]);
+
             $this->publishes([
                 __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
             ], 'vacuum-config');

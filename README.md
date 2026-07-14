@@ -78,6 +78,23 @@ VACUUM_CONNECTION=pgsql_readonly
 
 Point that at a role granted `pg_monitor` and nothing else. Vacuum never needs write access, and giving it none is the cheapest safety net you will ever configure.
 
+## In your pipeline
+
+The dashboard only tells you something if somebody opens it. The same rules run from a terminal:
+
+```bash
+php artisan vacuum:check
+```
+
+It exits **non-zero when the advisor finds something critical**, so a migration that ships a duplicate index fails the build, and a staging database drifting toward wraparound fails the nightly job, whether or not anybody was looking.
+
+```bash
+php artisan vacuum:check --fail-on=warning   # critical, warning, info, or never
+php artisan vacuum:check --format=json       # score, grade, deductions, findings
+```
+
+Two things worth knowing. It **never writes** — the remediation is printed for you to read and decide on, exactly as it is on the page. And if Vacuum is disabled it **fails rather than passing**: a check that goes green because it never looked is worse than no check at all.
+
 ## The SQL console
 
 Off by default. Off means the route does not exist — not a page that says no.
