@@ -23,4 +23,19 @@ enum Severity: string
             self::Info => 2,
         };
     }
+
+    /**
+     * What a finding of this severity costs the health score.
+     *
+     * An Info finding costs nothing: it is a fact, not a fault, and a server
+     * should not be marked down for telling you the truth about what it cannot see.
+     */
+    public function weight(): int
+    {
+        return match ($this) {
+            self::Critical => 15,
+            self::Warning => 5,
+            self::Info => 0,
+        };
+    }
 }

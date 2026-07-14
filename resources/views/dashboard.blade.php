@@ -1,6 +1,24 @@
 @extends('vacuum::layout')
 
 @section('content')
+    <section class="health health--{{ strtolower($health->grade->value) }}">
+        <div class="health__score">
+            <strong>{{ $health->score }}</strong><span>/ 100</span>
+            <em>Grade {{ $health->grade->value }}</em>
+        </div>
+
+        {{-- The arithmetic is shown rather than asserted. A score you cannot
+             check is a score you cannot argue with, and this one is only ever
+             a hundred minus what the findings below it cost. --}}
+        <div class="health__working">
+            @forelse ($health->deductions as $rule => $cost)
+                <span class="working"><code>{{ $rule }}</code> &minus;{{ $cost }}</span>
+            @empty
+                <span class="working">Nothing has been deducted.</span>
+            @endforelse
+        </div>
+    </section>
+
     <h2>Findings</h2>
 
     @forelse ($findings as $finding)

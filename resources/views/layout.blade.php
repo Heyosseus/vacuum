@@ -96,6 +96,28 @@
             font: 0.8125rem/1.5 ui-monospace, "SF Mono", Menlo, monospace;
         }
 
+        .health {
+            margin-top: 2rem;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-top: 3px solid var(--info);
+            border-radius: 6px;
+            padding: 1.25rem 1.375rem;
+        }
+        .health--a { border-top-color: #3f8f5f; }
+        .health--b { border-top-color: var(--info); }
+        .health--c, .health--d { border-top-color: var(--warning); }
+        .health--f { border-top-color: var(--critical); }
+
+        .health__score { display: flex; align-items: baseline; gap: 0.5rem; }
+        .health__score strong { font-size: 2.25rem; font-weight: 650; letter-spacing: -0.02em; }
+        .health__score span { color: var(--muted); font-size: 0.875rem; }
+        .health__score em { margin-left: auto; font-style: normal; font-weight: 600; color: var(--muted); }
+
+        .health__working { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+        .working { font-size: 0.8125rem; color: var(--muted); }
+        .working code { font-family: ui-monospace, Menlo, monospace; }
+
         .empty {
             background: var(--panel);
             border: 1px solid var(--line);

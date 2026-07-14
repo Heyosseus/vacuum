@@ -1,0 +1,93 @@
+<?php
+
+declare(strict_types=1);
+
+use Heyosseus\Vacuum\Advisor\Finding;
+use Heyosseus\Vacuum\Advisor\Grade;
+use Heyosseus\Vacuum\Advisor\Health;
+use Heyosseus\Vacuum\Advisor\Severity;
+
+function complaint(string $rule, Severity $severity, string $subject = 'public.widgets'): Finding
+{
+    return new Finding(
+        rule: $rule,
+        subject: $subject,
+        severity: $severity,
+        summary: 'summary',
+        impact: 'impact',
+    );
+}
+
+it('gives a database nobody has a complaint about full marks', function (): void {
+    $health = Health::from([]);
+
+    expect($health->score)->toBe(100)
+        ->and($health->grade)->toBe(Grade::A)
+        ->and($health->deductions)->toBe([]);
+});
+
+it('takes more off for a critical finding than for a warning', function (): void {
+    expect(Health::from([complaint('a', Severity::Critical)])->score)->toBe(85)
+        ->and(Health::from([complaint('a', Severity::Warning)])->score)->toBe(95);
+});
+
+it('charges nothing for something it merely wants you to know', function (): void {
+    // An Info finding is a fact, not a fault. Charging for it would mean a server
+    // is marked down for telling you the truth about what it cannot see.
+    expect(Health::from([complaint('partial-visibility', Severity::Info)])->score)->toBe(100);
+});
+
+it('shows its arithmetic', function (): void {
+    $health = Health::from([
+        complaint('dead-tuples', Severity::Critical),
+        complaint('unused-index', Severity::Warning),
+    ]);
+
+    expect($health->deductions)->toBe(['dead-tuples' => 15, 'unused-index' => 5])
+        ->and($health->score)->toBe(80);
+});
+
+it('stops one noisy rule from swallowing the whole score', function (): void {
+    // Forty bloated tables are one problem, not forty. Without a cap they would
+    // bury a blocked session that is taking the application down right now.
+    $findings = array_map(
+        fn (int $i): Finding => complaint('table-bloat', Severity::Warning, "public.table{$i}"),
+        range(1, 40),
+    );
+
+    expect(Health::from($findings)->deductions)->toBe(['table-bloat' => 25]);
+});
+
+it('never falls through the floor', function (): void {
+    $findings = [];
+
+    foreach (['a', 'b', 'c', 'd', 'e', 'f'] as $rule) {
+        $findings[] = complaint($rule, Severity::Critical);
+        $findings[] = complaint($rule, Severity::Critical);
+    }
+
+    expect(Health::from($findings)->score)->toBe(0)
+        ->and(Health::from($findings)->grade)->toBe(Grade::F);
+});
+
+it('puts the rule costing the most at the top of the arithmetic', function (): void {
+    $health = Health::from([
+        complaint('unused-index', Severity::Warning),
+        complaint('dead-tuples', Severity::Critical),
+    ]);
+
+    expect(array_key_first($health->deductions))->toBe('dead-tuples');
+});
+
+it('grades the score the way a school would', function (): void {
+    expect(Grade::for(100))->toBe(Grade::A)
+        ->and(Grade::for(90))->toBe(Grade::A)
+        ->and(Grade::for(89))->toBe(Grade::B)
+        ->and(Grade::for(80))->toBe(Grade::B)
+        ->and(Grade::for(79))->toBe(Grade::C)
+        ->and(Grade::for(70))->toBe(Grade::C)
+        ->and(Grade::for(69))->toBe(Grade::D)
+        ->and(Grade::for(60))->toBe(Grade::D)
+        ->and(Grade::for(59))->toBe(Grade::F)
+        ->and(Grade::for(0))->toBe(Grade::F);
+});

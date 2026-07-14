@@ -61,5 +61,27 @@ it('shows what the advisor found on the database it is pointed at', function ():
 it('says so plainly when it has nothing to complain about', function (): void {
     Vacuum::auth(static fn (Request $request): bool => true);
 
-    $this->get('/vacuum')->assertSee('Nothing to report');
+    $this->get('/vacuum')
+        ->assertSee('Nothing to report')
+        ->assertSee('Grade A')
+        ->assertSee('Nothing has been deducted');
+});
+
+it('cannot award a grade its own findings disagree with', function (): void {
+    // The failure this guards against is the one these dashboards are famous for:
+    // a green score sitting directly above a list of critical problems.
+    DB::statement('DROP TABLE IF EXISTS gadgets');
+    DB::statement('CREATE TABLE gadgets (id serial PRIMARY KEY)');
+    DB::insert('INSERT INTO gadgets SELECT generate_series(1, 5000)');
+    DB::delete('DELETE FROM gadgets');
+    DB::statement('SELECT pg_stat_force_next_flush()');
+
+    Vacuum::auth(static fn (Request $request): bool => true);
+
+    $this->get('/vacuum')
+        ->assertSee('dead-tuples')
+        ->assertDontSee('Grade A')
+        ->assertSee('&minus;15', escape: false);
+
+    DB::statement('DROP TABLE IF EXISTS gadgets');
 });
