@@ -7,6 +7,8 @@ namespace Heyosseus\Vacuum;
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\TableRule;
+use Heyosseus\Vacuum\Queries\ServerCapabilities;
+use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Override;
@@ -22,6 +24,13 @@ final class VacuumServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/vacuum.php', 'vacuum');
+
+        // Every panel wants to know what the server supports, and the answer
+        // cannot change underneath a single request.
+        $this->app->singleton(
+            Capabilities::class,
+            static fn (Application $app): Capabilities => $app->make(ServerCapabilities::class)->probe(),
+        );
 
         $this->app->tag([DeadTuples::class], self::TABLE_RULES);
 
