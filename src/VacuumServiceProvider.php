@@ -9,6 +9,7 @@ use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
+use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
@@ -27,6 +28,11 @@ final class VacuumServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/vacuum.php', 'vacuum');
+
+        $this->app->singleton(
+            SqlRepository::class,
+            static fn (): SqlRepository => new SqlRepository(__DIR__.'/../resources/sql'),
+        );
 
         // Every panel wants to know what the server supports, and the answer
         // cannot change underneath a single request.
