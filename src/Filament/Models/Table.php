@@ -6,16 +6,15 @@ namespace Heyosseus\Vacuum\Filament\Models;
 
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\Finding;
+use Heyosseus\Vacuum\Filament\Models\Concerns\ReadsSystemCatalog;
 use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Queries\TableProfiles;
 use Heyosseus\Vacuum\Support\IgnoredSchemas;
 use Heyosseus\Vacuum\Values\IndexStatistic;
 use Heyosseus\Vacuum\Values\TableProfile;
-use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Override;
-use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -38,10 +37,14 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * @property string $relname
  * @property int $n_live_tup
  * @property int $n_dead_tup
+ * @property int $seq_scan
+ * @property int $idx_scan
  * @property int|null $total_bytes
  */
 final class Table extends Model
 {
+    use ReadsSystemCatalog;
+
     protected $table = 'pg_stat_user_tables';
 
     protected $primaryKey = 'relid';
@@ -58,18 +61,6 @@ final class Table extends Model
 
     /** @var list<IndexStatistic>|null */
     private ?array $indexes = null;
-
-    /**
-     * Read down Vacuum's configured connection, not the application's default, so
-     * the panel inspects the same database everything else in the package does.
-     */
-    #[Override]
-    public function getConnectionName(): ?string
-    {
-        $name = app(Repository::class)->get('vacuum.connection');
-
-        return is_string($name) ? $name : null;
-    }
 
     /**
      * Every query the model builds is filtered to the schemas a panel may report
@@ -124,6 +115,18 @@ final class Table extends Model
         return $total === 0 ? 0.0 : $this->n_dead_tup / $total;
     }
 
+    /**
+     * The share of reads that scanned the whole table rather than looking a row up.
+     * Null when nothing has read the table at all, which is a different fact from "no
+     * scans" and the list says the different thing rather than paint a misleading zero.
+     */
+    public function sequentialShare(): ?float
+    {
+        $reads = $this->seq_scan + $this->idx_scan;
+
+        return $reads === 0 ? null : $this->seq_scan / $reads;
+    }
+
     /** The full profile behind the drill-down, resolved once through the same query the Blade page uses. */
     public function profile(): TableProfile
     {
@@ -166,27 +169,5 @@ final class Table extends Model
             app(IndexStatistics::class)->all(),
             fn (IndexStatistic $index): bool => $index->schema === $this->schemaname && $index->table === $this->relname,
         ));
-    }
-
-    /**
-     * @param  array<string, mixed>  $options
-     *
-     * @codeCoverageIgnore The point of the model is that this never runs; the test that
-     *                     proves it throws does not count as covering the body.
-     */
-    #[Override]
-    public function save(array $options = []): bool
-    {
-        throw new RuntimeException('Vacuum never writes to the database it inspects; pg_stat_user_tables is read-only.');
-    }
-
-    /**
-     * @codeCoverageIgnore As above: a model that cannot be deleted is the safety net,
-     *                     and the guard body is not meaningful to line-count.
-     */
-    #[Override]
-    public function delete(): bool
-    {
-        throw new RuntimeException('Vacuum never writes to the database it inspects; pg_stat_user_tables is read-only.');
     }
 }

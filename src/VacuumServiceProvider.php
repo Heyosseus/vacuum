@@ -38,6 +38,7 @@ use Heyosseus\Vacuum\Console\Commands\CheckCommand;
 use Heyosseus\Vacuum\Console\Commands\InstallCommand;
 use Heyosseus\Vacuum\Filament\Install\PhpLintChecker;
 use Heyosseus\Vacuum\Filament\Install\SyntaxChecker;
+use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
@@ -106,6 +107,11 @@ final class VacuumServiceProvider extends ServiceProvider
             Capabilities::class,
             static fn (Application $app): Capabilities => $app->make(ServerCapabilities::class)->probe(),
         );
+
+        // The Overview's widgets share one inspection: scoped so it runs the advisor
+        // once per request and is forgotten between them, rather than caching a stale
+        // health score into the next page load.
+        $this->app->scoped(PanelData::class);
 
         $this->app->tag([DeadTuples::class, StaleStatistics::class, Wraparound::class], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
@@ -215,6 +221,8 @@ final class VacuumServiceProvider extends ServiceProvider
 
         $this->registerRoutes();
 
+        $this->registerFilamentWidgets();
+
         if ($this->app->runningInConsole()) {
             $this->commands([CheckCommand::class, InstallCommand::class]);
 
@@ -225,6 +233,31 @@ final class VacuumServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/vacuum'),
             ], 'vacuum-views');
+        }
+    }
+
+    /**
+     * Enrol the Overview's widgets as Livewire components.
+     *
+     * Filament registers the Livewire components for a panel's pages and for a resource's
+     * widgets, but not for the widgets a standalone page places in its header, which is
+     * what the Overview does. So they are registered here instead -- under the same names
+     * Filament would give them -- early and unconditionally in every request, rather than
+     * in the plugin's boot, whose timing sits behind Filament's own component caching.
+     *
+     * It stays silent for a Blade-only install: without Filament and Livewire there are
+     * no widgets to place and nothing to register.
+     */
+    private function registerFilamentWidgets(): void
+    {
+        if (! class_exists(\Filament\Panel::class) || ! class_exists(\Livewire\Livewire::class)) {
+            return;
+        }
+
+        $registry = $this->app->make(\Livewire\Mechanisms\ComponentRegistry::class);
+
+        foreach (Filament\VacuumPlugin::widgets() as $widget) {
+            \Livewire\Livewire::component($registry->getName($widget), $widget);
         }
     }
 
