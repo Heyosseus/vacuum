@@ -251,7 +251,8 @@ final class VacuumServiceProvider extends ServiceProvider
     private function registerFilamentWidgets(): void
     {
         if (! class_exists(\Filament\Panel::class) || ! class_exists(\Livewire\Livewire::class)) {
-            return;
+            // Only a Blade-only application gets here; the suite always installs Filament.
+            return; // @codeCoverageIgnore
         }
 
         $registry = $this->app->make(\Livewire\Mechanisms\ComponentRegistry::class);

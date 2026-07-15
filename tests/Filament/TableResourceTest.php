@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\Column;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Heyosseus\Vacuum\Filament\Models\Table;
 use Heyosseus\Vacuum\Filament\Resources\TableResource;
 use Heyosseus\Vacuum\Filament\Resources\TableResource\Pages\ListTables;
@@ -174,4 +176,43 @@ it('keeps a stranger out of the resource as firmly as out of the dashboard', fun
     expect(TableResource::canAccess())->toBeFalse()
         ->and(TableResource::canViewAny())->toBeFalse()
         ->and(TableResource::canView($record))->toBeFalse();
+});
+
+it('carries the live-row count and the sequential-scan share', function (): void {
+    $columns = listColumns();
+
+    $rows = $columns['n_live_tup'];
+    $seq = $columns['seq_share'];
+
+    expect($rows->formatState($rows->getState()))->toBeString()
+        ->and($seq->getState())->toBeString()
+        // Whether the table is read by scanning or by key, the badge has a quiet or an
+        // alarmed colour, and evaluating it proves the share is read either way.
+        ->and($seq->getColor($seq->getState()))->toBeIn(['warning', 'gray']);
+});
+
+it('filters the tables every way the list offers', function (): void {
+    $page = app(ListTables::class);
+    $page->bootedInteractsWithTable();
+
+    $schemas = null;
+    $toggles = 0;
+
+    foreach ($page->getTable()->getFilters() as $filter) {
+        if ($filter instanceof SelectFilter) {
+            // The schema filter builds its options from the tables that exist.
+            $schemas = $filter->getOptions();
+        }
+
+        if ($filter instanceof Filter) {
+            $query = TableResource::getEloquentQuery();
+            $filter->apply($query, ['isActive' => true]);
+            $query->get();
+            $toggles++;
+        }
+    }
+
+    // public holds crates, and dead-heavy, never-vacuumed and never-analyzed each run.
+    expect($schemas)->toHaveKey('public')
+        ->and($toggles)->toBe(3);
 });
