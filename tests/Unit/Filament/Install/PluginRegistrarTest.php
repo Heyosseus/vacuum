@@ -56,6 +56,40 @@ it('lands the plugin call on a single-line chain', function (): void {
         ->and($result)->toMatch(pluginCallBeforeSemicolon());
 });
 
+it('splices without a line break when the chain shares the return line', function (): void {
+    // No newline before the first arrow, so there is no indentation to copy and the
+    // call must land inline, immediately after the last call in the chain.
+    $source = <<<'PHP'
+    <?php
+
+    namespace App\Providers\Filament;
+
+    use Filament\Panel;
+    use Filament\PanelProvider;
+
+    class AdminPanelProvider extends PanelProvider
+    {
+        public function panel(Panel $panel): Panel
+        {
+            return $panel->default()->id('admin');
+        }
+    }
+    PHP;
+
+    $result = (new PluginRegistrar)->inject($source);
+
+    expect($result)->not->toBeNull()
+        ->and($result)->toContain("->id('admin')->plugin(\Heyosseus\Vacuum\Filament\VacuumPlugin::make());");
+});
+
+it('refuses a chain that never reaches its semicolon', function (): void {
+    // A file truncated mid-statement: the return is there but its terminator is not,
+    // so there is nowhere safe to splice and the registrar must say so.
+    $source = '<?php return $panel->default()';
+
+    expect((new PluginRegistrar)->inject($source))->toBeNull();
+});
+
 it('is not fooled by a plugins array already in the chain', function (): void {
     // The array holds its own semicolon-free brackets and commas; the terminator we
     // want is the one that ends the whole return statement, after the array closes.

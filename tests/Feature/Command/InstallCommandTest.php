@@ -86,6 +86,14 @@ it('sets up the blade dashboard when asked for blade', function (): void {
         ->and(Artisan::output())->toContain('/vacuum');
 });
 
+it('keeps the blade dashboard when told nothing and it cannot ask', function (): void {
+    // No flag and no prompt to fall back on: today's behaviour, the Blade routes.
+    $code = Artisan::call('vacuum:install', ['--no-interaction' => true]);
+
+    expect($code)->toBe(Command::SUCCESS)
+        ->and(Artisan::output())->toContain('/vacuum');
+});
+
 it('tells you to make a panel when there is none', function (): void {
     $code = Artisan::call('vacuum:install', ['--filament' => true, '--panel-dir' => $this->dir]);
 
@@ -165,10 +173,12 @@ it('edits after the edit is confirmed', function (): void {
 
 it('does not silently edit a file when it cannot ask', function (): void {
     // Non-interactive and without --force: the safe default is to print, not write.
+    // --no-interaction is load-bearing: Artisan::call input reports interactive by
+    // default, and a real confirm() here would block CI on a prompt nobody answers.
     $path = writeProvider($this->dir, 'AdminPanelProvider');
     $original = (string) file_get_contents($path);
 
-    $code = Artisan::call('vacuum:install', ['--filament' => true, '--panel-dir' => $this->dir]);
+    $code = Artisan::call('vacuum:install', ['--filament' => true, '--panel-dir' => $this->dir, '--no-interaction' => true]);
 
     expect($code)->toBe(Command::SUCCESS)
         ->and(file_get_contents($path))->toBe($original);
@@ -187,14 +197,17 @@ it('picks the named panel out of several', function (): void {
 });
 
 it('lists the panels when several match and it cannot choose', function (): void {
+    // "Cannot choose" means non-interactive: without the flag this reaches a real
+    // choice() prompt whose retry loop runs unbounded in CI until memory runs out.
     writeProvider($this->dir, 'AdminPanelProvider');
     writeProvider($this->dir, 'AppPanelProvider');
 
-    $code = Artisan::call('vacuum:install', ['--filament' => true, '--panel-dir' => $this->dir]);
+    $code = Artisan::call('vacuum:install', ['--filament' => true, '--panel-dir' => $this->dir, '--no-interaction' => true]);
+    $output = Artisan::output();
 
     expect($code)->toBe(Command::SUCCESS)
-        ->and(Artisan::output())->toContain('AdminPanelProvider')
-        ->and(Artisan::output())->toContain('AppPanelProvider');
+        ->and($output)->toContain('AdminPanelProvider')
+        ->and($output)->toContain('AppPanelProvider');
 });
 
 it('lists the panels when a name matches none of several', function (): void {

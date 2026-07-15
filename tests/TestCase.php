@@ -67,10 +67,22 @@ abstract class TestCase extends Orchestra
     /**
      * The authorization callback is static, so it outlives the application the
      * test booted it into. Left behind, it would authorize the next test.
+     *
+     * Connections are purged for the same reason: each test's PDO session
+     * otherwise stays open until the whole run exits, and a few hundred tests
+     * exhaust PostgreSQL's hundred-connection default mid-suite.
      */
     protected function tearDown(): void
     {
         Vacuum::auth(null);
+
+        if ($this->app !== null) {
+            $manager = $this->app->make('db');
+
+            foreach (array_keys($manager->getConnections()) as $name) {
+                $manager->purge($name);
+            }
+        }
 
         parent::tearDown();
     }
