@@ -13,6 +13,10 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # A passing suite finishes in a couple of minutes; anything approaching this
+    # is a hang, and failing fast is cheaper than burning an hour of runner time.
+    timeout-minutes: 15
+
     strategy:
       fail-fast: false
       matrix:
@@ -26,9 +30,12 @@ jobs:
           - php: '8.3'
             laravel: '12.*'
             testbench: '10.*'
+          # Coverage is identical across the version matrix, so it is collected on
+          # a single leg rather than recomputed four times.
           - php: '8.4'
             laravel: '12.*'
             testbench: '10.*'
+            coverage: true
 
     name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
 
@@ -59,7 +66,19 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: pdo, pdo_pgsql, pgsql
-          coverage: xdebug
+          # PCOV is many times faster than Xdebug for line coverage, which is all
+          # `--min=100` needs; legs that do not collect coverage carry no driver at
+          # all so nothing instruments their run.
+          coverage: ${{ matrix.coverage && 'pcov' || 'none' }}
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ matrix.php }}-${{ matrix.laravel }}-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-${{ matrix.php }}-${{ matrix.laravel }}-
+            composer-${{ matrix.php }}-
 
       - name: Install dependencies
         run: |
@@ -78,8 +97,10 @@ jobs:
       - name: Type coverage
         run: composer test:type-coverage
 
+      # Only the coverage leg pays for line-coverage collection and the 100%
+      # gate; the other legs run the same tests without instrumentation.
       - name: Unit tests
-        run: composer test:unit
+        run: ${{ matrix.coverage && 'composer test:unit' || 'vendor/bin/pest --colors=always' }}
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: 5432
