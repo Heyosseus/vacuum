@@ -34,6 +34,7 @@ Six of those rules describe a database that is slower than it could be. `wraparo
 - PHP 8.3+
 - Laravel 11 or 12
 - PostgreSQL 14+
+- Filament 4 — optional, only if you want the UI inside a panel
 
 `pg_stat_statements` is optional. Without it, Vacuum says so on the page rather than quietly showing you an empty panel.
 
@@ -41,10 +42,41 @@ Six of those rules describe a database that is slower than it could be. `wraparo
 
 ```bash
 composer require heyosseus/vacuum
-php artisan vendor:publish --tag=vacuum-config
+php artisan vacuum:install
 ```
 
-Then open `/vacuum`.
+`vacuum:install` publishes the config and asks one question: serve the UI as the standalone Blade dashboard, or inside a Filament panel? Answer Blade (the default) and you are done — open `/vacuum`. Prefer to do it by hand? `php artisan vendor:publish --tag=vacuum-config` and open `/vacuum` is the whole of the Blade path.
+
+## Inside Filament
+
+If your app already runs a [Filament](https://filamentphp.com) v4 panel, Vacuum can live inside it rather than at a separate `/vacuum` URL — the same data the Filament way.
+
+**Filament is an optional peer.** The package never requires `filament/filament`; the plugin's classes load only when your app already has it, so nothing changes for a Blade-only install.
+
+```bash
+composer require heyosseus/vacuum
+php artisan vacuum:install --filament
+```
+
+On the Filament path the installer finds your panel provider (`app/Providers/Filament/*PanelProvider.php`) and registers the plugin on it for you. It edits that file by **parsing it, not matching text** — it locates the `return $panel …;` chain with PHP's own tokenizer, backs the file up, splices in the plugin, and runs `php -l` on the result; if anything looks wrong it restores the backup and prints the one line to add by hand instead. It will not silently edit a file it cannot parse, and in a non-interactive shell it prints rather than writes unless you pass `--force`.
+
+The one line it adds:
+
+```php
+->plugin(\Heyosseus\Vacuum\Filament\VacuumPlugin::make())
+```
+
+Then set the UI mode so the standalone Blade routes stand down and the same data is not reachable by two different doors:
+
+```env
+VACUUM_UI=filament
+```
+
+Authorization is shared, not duplicated: the plugin's `canAccess()` calls the same [`Vacuum::auth()`](#who-may-look) callback the Blade dashboard uses. One gate governs both.
+
+> **This first slice ships the Tables surface** — a read-only resource over `pg_stat_user_tables` with native Filament sort/search/filter/pagination, and a drill-down page carrying the same profile and findings as the Blade table page. The health-score Dashboard and the SQL Console arrive as Filament pages in later slices; until then, do not flip `VACUUM_UI=filament` if you rely on those, or you will lose them from the UI.
+
+Flags for scripted installs: `--blade` / `--filament` skip the prompt, `--panel=<name>` picks one panel out of several, `--force` applies the edit without confirming.
 
 ## Who may look
 

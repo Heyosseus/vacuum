@@ -35,6 +35,9 @@ use Heyosseus\Vacuum\Advisor\SettingRule;
 use Heyosseus\Vacuum\Advisor\StatementRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Console\Commands\CheckCommand;
+use Heyosseus\Vacuum\Console\Commands\InstallCommand;
+use Heyosseus\Vacuum\Filament\Install\PhpLintChecker;
+use Heyosseus\Vacuum\Filament\Install\SyntaxChecker;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
@@ -93,6 +96,9 @@ final class VacuumServiceProvider extends ServiceProvider
             SqlRepository::class,
             static fn (): SqlRepository => new SqlRepository(__DIR__.'/../resources/sql'),
         );
+
+        // The installer verifies its own edits by handing the file to PHP itself.
+        $this->app->bind(SyntaxChecker::class, PhpLintChecker::class);
 
         // Every panel wants to know what the server supports, and the answer
         // cannot change underneath a single request.
@@ -210,7 +216,7 @@ final class VacuumServiceProvider extends ServiceProvider
         $this->registerRoutes();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([CheckCommand::class]);
+            $this->commands([CheckCommand::class, InstallCommand::class]);
 
             $this->publishes([
                 __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
@@ -232,6 +238,10 @@ final class VacuumServiceProvider extends ServiceProvider
         $config = $this->app->make(Repository::class);
 
         if (! (bool) $config->get('vacuum.enabled', true)) {
+            return;
+        }
+
+        if ($config->get('vacuum.ui', 'blade') === 'filament') {
             return;
         }
 

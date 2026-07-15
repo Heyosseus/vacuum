@@ -19,6 +19,9 @@
         </include>
     </source>
     <php>
+        <!-- Collecting line coverage while Filament's classes are loaded needs more
+             than PHP's default; 512M is exhausted partway through the suite. -->
+        <ini name="memory_limit" value="2G"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="5432"/>

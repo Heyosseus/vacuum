@@ -35,6 +35,7 @@
         "illuminate/view": "^11.0 || ^12.0"
     },
     "require-dev": {
+        "filament/filament": "^4.0",
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.18",
         "orchestra/testbench": "^9.5 || ^10.0",
@@ -43,6 +44,9 @@
         "pestphp/pest-plugin-type-coverage": "^3.2",
         "rector/rector": "^2.0",
         "symfony/var-dumper": "^7.1"
+    },
+    "suggest": {
+        "filament/filament": "Serve Vacuum's UI inside a Filament v4 panel instead of the standalone Blade dashboard (^4.0)."
     },
     "autoload": {
         "psr-4": {

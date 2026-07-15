@@ -57,6 +57,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | User Interface
+    |--------------------------------------------------------------------------
+    |
+    | How Vacuum serves its dashboard. 'blade' registers the standalone routes
+    | above. 'filament' hands the UI to the Filament plugin instead and registers
+    | no standalone routes, so the same information is never reachable by two
+    | different doors. Run `php artisan vacuum:install` to choose.
+    |
+    */
+
+    'ui' => env('VACUUM_UI', 'blade'),
+
+    /*
+    |--------------------------------------------------------------------------
     | SQL Console
     |--------------------------------------------------------------------------
     |
