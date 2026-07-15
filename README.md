@@ -6,7 +6,7 @@ Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables
 
 It shows you that statement. It never runs it.
 
-> **Status: in development.** Not released yet.
+> **Status: 0.1.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
 
 ## What it tells you
 
@@ -74,7 +74,17 @@ VACUUM_UI=filament
 
 Authorization is shared, not duplicated: the plugin's `canAccess()` calls the same [`Vacuum::auth()`](#who-may-look) callback the Blade dashboard uses. One gate governs both.
 
-> **This first slice ships the Tables surface** — a read-only resource over `pg_stat_user_tables` with native Filament sort/search/filter/pagination, and a drill-down page carrying the same profile and findings as the Blade table page. The health-score Dashboard and the SQL Console arrive as Filament pages in later slices; until then, do not flip `VACUUM_UI=filament` if you rely on those, or you will lose them from the UI.
+### What the panel gives you
+
+Everything lands in one **Vacuum** navigation group:
+
+- **Overview** — the health story at a glance: the score and its grade, database vitals (size, table count, cache-hit ratio, live sessions), and charts for findings by severity, the largest tables, and how much index space is read versus never touched. Beneath them, the findings themselves, worst first — each with the statement that would put it right, shown and copied with one click, never run — and a live view of any vacuums PostgreSQL is running at that moment.
+- **Tables** — a read-only resource over `pg_stat_user_tables` with native Filament sort, search, filter and pagination, and a drill-down carrying the same profile and findings as the Blade table page.
+- **Indexes**, **Sessions**, **Statements** — the same read-only treatment over `pg_stat_user_indexes`, `pg_stat_activity` (live, polling) and `pg_stat_statements`. The last hides itself where the extension is not installed.
+
+Every surface asks that one `Vacuum::auth()` callback, and every one opts out of Filament's tenant scoping — the catalogs Vacuum reads belong to the server, not to any one tenant — so the panel is at home in a multi-tenant install rather than throwing on a relationship these read-only models have no reason to carry.
+
+> **The SQL console stays on the Blade UI for now.** It is not yet a Filament page, and `VACUUM_UI=filament` stands the standalone routes down, so if you rely on the console keep the Blade UI until a later release brings it inside the panel.
 
 Flags for scripted installs: `--blade` / `--filament` skip the prompt, `--panel=<name>` picks one panel out of several, `--force` applies the edit without confirming.
 
