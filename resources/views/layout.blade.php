@@ -346,6 +346,49 @@
 
         .copy:hover { color: var(--ink); }
 
+        /* ---- facts: the drill-down grid ------------------------------------------
+           A definition list, because that is what it is: a term and the number that
+           answers it. Laid out in columns so the eye can run down them. */
+
+        .facts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+            gap: 0.875rem 1.5rem;
+            margin: 0.875rem 0 0;
+        }
+
+        .facts dt {
+            font: 400 0.625rem/1.4 var(--mono);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--faint);
+        }
+
+        .facts dd { margin: 0.125rem 0 0; font: 400 1.0625rem/1.3 var(--mono); }
+        .facts .note { font-size: 0.75rem; }
+
+        .aside {
+            margin: 1rem 0 0;
+            padding-left: 0.75rem;
+            border-left: 2px solid var(--line);
+            font-size: 0.875rem;
+            color: var(--muted);
+            max-width: 74ch;
+        }
+
+        .aside b { color: var(--ink); font-weight: 600; }
+        .aside code { font: 400 0.8125rem/1 var(--mono); color: var(--amber); }
+
+        .bad { color: var(--red); }
+
+        .open {
+            color: var(--muted);
+            text-decoration: none;
+            border-bottom: 1px dotted var(--faint);
+        }
+
+        .open:hover { color: var(--amber); border-bottom-color: var(--amber); }
+
         /* ---- tables ------------------------------------------------------------- */
 
         .scroll { overflow-x: auto; }

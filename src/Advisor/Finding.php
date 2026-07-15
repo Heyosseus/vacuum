@@ -20,6 +20,10 @@ final readonly class Finding
      * @param  string|null  $query  A read-only statement that shows the reader what the rule
      *                              saw, ready to open in the console. Never the remediation:
      *                              that one writes, and the console refuses to write.
+     * @param  string|null  $table  The schema-qualified table this is about, when it is about
+     *                              one. The subject is not enough to work it out: an index
+     *                              finding's subject is the index, and public.orders_label_idx
+     *                              is not a table anybody can open.
      */
     public function __construct(
         public string $rule,
@@ -30,5 +34,6 @@ final readonly class Finding
         public ?string $remediation = null,
         public ?string $evidence = null,
         public ?string $query = null,
+        public ?string $table = null,
     ) {}
 }

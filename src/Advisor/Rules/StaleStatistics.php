@@ -95,6 +95,7 @@ final readonly class StaleStatistics implements TableRule
                 .'WHERE schemaname = '.Identifier::literal($table->schema)
                 .' AND tablename = '.Identifier::literal($table->name)."\n"
                 .'ORDER BY attname;',
+            table: $table->qualifiedName(),
         );
     }
 

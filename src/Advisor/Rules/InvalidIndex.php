@@ -50,6 +50,7 @@ final readonly class InvalidIndex implements IndexRule
             query: "SELECT pid, phase, blocks_done, blocks_total\n"
                 ."FROM pg_stat_progress_create_index\n"
                 .'WHERE index_relid = '.Identifier::literal($index->qualifiedName()).'::regclass;',
+            table: $index->schema.'.'.$index->table,
         );
     }
 }

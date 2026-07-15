@@ -52,6 +52,7 @@ final readonly class DuplicateIndex implements DuplicateRule
                 .'WHERE schemaname = '.Identifier::literal($duplicate->schema)
                 .' AND tablename = '.Identifier::literal($duplicate->table)."\n"
                 .'ORDER BY indexname;',
+            table: $duplicate->schema.'.'.$duplicate->table,
         );
     }
 }

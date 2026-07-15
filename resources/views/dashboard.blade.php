@@ -177,6 +177,10 @@
                          data-rule="{{ $finding->rule }}"
                          @if ($finding->query !== null && Route::has('vacuum.console'))
                              data-open="{{ route('vacuum.console', ['statement' => $finding->query]) }}"
+                         @endif
+                         @if ($finding->table !== null)
+                             @php [$schema, $named] = explode('.', $finding->table, 2) @endphp
+                             data-table="{{ route('vacuum.table', [$schema, $named]) }}"
                          @endif>
                     {{-- The gutter is what PostgreSQL said. The column is what Vacuum
                          made of it. Keeping the two apart is the whole idea of the
@@ -187,7 +191,22 @@
                     </div>
 
                     <div class="body">
-                        <p class="subject">{{ $finding->subject }}</p>
+                        <p class="subject">
+                            {{ $finding->subject }}
+
+                            {{-- The table this is about, which is not always the
+                                 subject: an index finding is about an index, and
+                                 public.orders_label_idx is not a page anybody can
+                                 open. The rule knows, so the rule says. --}}
+                            @if ($finding->table !== null)
+                                @php [$schema, $named] = explode('.', $finding->table, 2) @endphp
+
+                                <a class="open" href="{{ route('vacuum.table', [$schema, $named]) }}">
+                                    open {{ $finding->table }}
+                                </a>
+                            @endif
+                        </p>
+
                         <p class="summary">{{ $finding->summary }}</p>
 
                         @if ($finding->evidence !== null)
@@ -246,6 +265,7 @@
         <span><b>1</b>–<b>3</b> severity</span>
         <span><b>j</b> <b>k</b> move</span>
         <span><b>enter</b> inspect</span>
+        <span><b>t</b> open table</span>
         <span><b>c</b> console</span>
         <span><b>esc</b> clear</span>
         <span class="said" data-said aria-live="polite"></span>
@@ -454,6 +474,12 @@
 
                     if (target !== undefined) {
                         window.location = target;
+                    }
+                } else if (event.key === 't' && cursor >= 0) {
+                    const table = shown()[cursor].dataset.table;
+
+                    if (table !== undefined) {
+                        window.location = table;
                     }
                 }
             });

@@ -65,6 +65,7 @@ final readonly class Wraparound implements TableRule
                 ."WHERE relkind = 'r'\n"
                 ."ORDER BY age(relfrozenxid) DESC\n"
                 .'LIMIT 10;',
+            table: $table->qualifiedName(),
         );
     }
 

@@ -54,6 +54,7 @@ final readonly class DeadTuples implements TableRule
                 ."FROM pg_stat_user_tables\n"
                 .'WHERE schemaname = '.Identifier::literal($table->schema)
                 .' AND relname = '.Identifier::literal($table->name).';',
+            table: $table->qualifiedName(),
         );
     }
 

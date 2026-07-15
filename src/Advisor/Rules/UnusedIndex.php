@@ -59,6 +59,7 @@ final readonly class UnusedIndex implements IndexRule
                 .'WHERE schemaname = '.Identifier::literal($index->schema)
                 .' AND relname = '.Identifier::literal($index->table)."\n"
                 .'ORDER BY idx_scan;',
+            table: $index->schema.'.'.$index->table,
         );
     }
 
