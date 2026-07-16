@@ -12,7 +12,7 @@ It shows you that statement. It never runs it.
 
 ![Vacuum's standalone dashboard: the health grade and the findings that produced it](art/blade-overview.png)
 
-> **Status: 0.1.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
+> **Status: 0.3.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
 
 ## What it tells you
 
