@@ -40,7 +40,7 @@ Six of those rules describe a database that is slower than it could be. `wraparo
 - PHP 8.3+
 - Laravel 11 or 12
 - PostgreSQL 14+
-- Filament 4 — optional, only if you want the UI inside a panel
+- Filament 4 or 5 — optional, only if you want the UI inside a panel
 
 `pg_stat_statements` is optional. Without it, Vacuum says so on the page rather than quietly showing you an empty panel.
 
@@ -65,7 +65,7 @@ The built-in SQL console runs every statement inside a read-only transaction tha
 
 ## Inside Filament
 
-If your app already runs a [Filament](https://filamentphp.com) v4 panel, Vacuum can live inside it rather than at a separate `/vacuum` URL — the same data the Filament way.
+If your app already runs a [Filament](https://filamentphp.com) v4 or v5 panel, Vacuum can live inside it rather than at a separate `/vacuum` URL — the same data the Filament way.
 
 **Filament is an optional peer.** The package never requires `filament/filament`; the plugin's classes load only when your app already has it, so nothing changes for a Blade-only install.
 

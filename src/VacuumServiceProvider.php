@@ -245,20 +245,24 @@ final class VacuumServiceProvider extends ServiceProvider
      * Filament would give them -- early and unconditionally in every request, rather than
      * in the plugin's boot, whose timing sits behind Filament's own component caching.
      *
-     * It stays silent for a Blade-only install: without Filament and Livewire there are
-     * no widgets to place and nothing to register.
+     * It stays silent unless Livewire is actually running: a Blade-only install has no
+     * Livewire to register against, and neither does a bare unit test that boots this
+     * provider alone, so the presence of the binding -- not merely the class -- is what
+     * says there is a Livewire here to enrol the widgets into.
      */
     private function registerFilamentWidgets(): void
     {
-        if (! class_exists(\Filament\Panel::class) || ! class_exists(\Livewire\Livewire::class)) {
-            // Only a Blade-only application gets here; the suite always installs Filament.
+        if (! class_exists(\Filament\Panel::class) || ! $this->app->bound('livewire')) {
+            // A Blade-only application, or a unit test without the Livewire provider.
             return; // @codeCoverageIgnore
         }
 
-        $registry = $this->app->make(\Livewire\Mechanisms\ComponentRegistry::class);
-
+        // The single-argument form lets Livewire derive the component's name from its
+        // class itself, under whichever mechanism the installed version ships -- the
+        // Finder in v4 (Filament v5), the ComponentRegistry in v3 (Filament v4) -- and
+        // it is the same name Filament mounts the widget by, so the two always agree.
         foreach (Filament\VacuumPlugin::widgets() as $widget) {
-            \Livewire\Livewire::component($registry->getName($widget), $widget);
+            \Livewire\Livewire::component($widget);
         }
     }
 
