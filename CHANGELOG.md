@@ -11,6 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The statements panel and inspection no longer 500 on a server where `CREATE EXTENSION pg_stat_statements` ran but the library was never listed in `shared_preload_libraries`. The capability probe now reads the preload list and treats the extension as usable only when it is both created and loaded; a role the server hides the list from (no `pg_read_all_settings`) keeps the old trust in `pg_extension`, and a mid-request SQLSTATE `55000` degrades to the guidance finding instead of an error page either way.
 - One inspection throwing no longer 500s the whole dashboard. The advisor now catches each inspection's failure and reports it as an `inspection-failed` Info finding — naming the inspection, keeping the exception message as the impact — so the panels fed by the other inspections keep rendering.
 
+### Added
+
+- **History over time (opt-in).** A `vacuum:snapshot` command records the health score, the findings and the raw per-object metrics behind them into three tables on the application's own database, on a schedule you set or that Vacuum registers for you. Once two snapshots exist, the advisor gains **interval-accurate** `cache-hit-ratio` and `slow-statement` figures — measured over the last interval rather than the life of the server — a climbing / easing / new **direction** on each finding, a **time-to-critical forecast** for freeze age and table size, and a diff of what is newly wrong or newly cleared since the previous snapshot. Surfaced as a **History** page in the Filament panel and a **history** tab on the Blade dashboard, both shown only while history is on.
+- History is off by default and is the package's only write path; it writes exclusively to the storage connection (`VACUUM_HISTORY_CONNECTION`, the application's default when unset) and never to the inspected database. New configuration under `vacuum.history`, and a published migration (`php artisan vendor:publish --tag=vacuum-migrations`).
+
 ## [0.1.0] - 2026-07-15
 
 First release.

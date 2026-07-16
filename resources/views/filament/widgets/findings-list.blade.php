@@ -35,6 +35,10 @@
             .dark .vac-summary { color:#e5e7eb; }
             .vac-impact { margin:.25rem 0 0; font-size:.75rem; line-height:1.5; color:#6b7280; }
             .dark .vac-impact { color:#9ca3af; }
+            .vac-trend { display:inline-flex; align-items:center; gap:.3rem; margin-top:.625rem; font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+            .vac-forecast { display:flex; align-items:flex-start; gap:.375rem; margin:.5rem 0 0; font-size:.75rem; font-weight:500; line-height:1.5; color:#b45309; }
+            .dark .vac-forecast { color:#fbbf24; }
+            .vac-forecast svg { width:.875rem; height:.875rem; flex:none; margin-top:.125rem; }
 
             .vac-fix { margin-top:.75rem; overflow:hidden; border-radius:.5rem; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06); }
             .dark .vac-fix { box-shadow:inset 0 0 0 1px rgba(255,255,255,.1); }
@@ -66,6 +70,7 @@
         </style>
 
         @php($findings = $this->findings())
+        @php($views = $this->findingViews())
 
         <div class="vac-findings">
             @if (count($findings) === 0)
@@ -95,7 +100,10 @@
 
                 {{-- The cases themselves. An ordered list because the order is the triage order. --}}
                 <ol class="vac-list">
-                    @foreach ($findings as $finding)
+                    @foreach ($views as $view)
+                        @php($finding = $view->finding)
+                        @php($trend = $this->trend($view))
+                        @php($forecast = $this->forecast($view))
                         <li class="vac-case">
                             <span class="vac-rail" style="background: {{ $this->rail($finding) }}" aria-hidden="true"></span>
 
@@ -110,8 +118,23 @@
                                 </x-filament::badge>
                             </div>
 
-                            <p class="vac-summary">{{ $finding->summary }}</p>
+                            <p class="vac-summary">{{ $view->summary() }}</p>
                             <p class="vac-impact">{{ $finding->impact }}</p>
+
+                            @if ($trend)
+                                {{-- Which way the number has been moving across recent snapshots. --}}
+                                <span class="vac-trend" style="color: {{ $trend['color'] }}">{{ $trend['symbol'] }} {{ $trend['label'] }}</span>
+                            @endif
+
+                            @if ($forecast)
+                                {{-- History stated as a date: when this is projected to become critical. --}}
+                                <p class="vac-forecast">
+                                    <svg fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>{{ $forecast }}</span>
+                                </p>
+                            @endif
 
                             @if ($finding->remediation)
                                 {{-- The prescription: the fix, one action away, carrying the promise that it is only ever shown. --}}

@@ -36,8 +36,10 @@ use Heyosseus\Vacuum\Advisor\StatementRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Console\Commands\CheckCommand;
 use Heyosseus\Vacuum\Console\Commands\InstallCommand;
+use Heyosseus\Vacuum\Console\Commands\SnapshotCommand;
 use Heyosseus\Vacuum\Filament\Install\PhpLintChecker;
 use Heyosseus\Vacuum\Filament\Install\SyntaxChecker;
+use Heyosseus\Vacuum\Filament\Support\HistoryPanel;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
@@ -50,6 +52,7 @@ use Heyosseus\Vacuum\Queries\Statements;
 use Heyosseus\Vacuum\Queries\TableStatistics;
 use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\Capabilities;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -112,6 +115,10 @@ final class VacuumServiceProvider extends ServiceProvider
         // once per request and is forgotten between them, rather than caching a stale
         // health score into the next page load.
         $this->app->scoped(PanelData::class);
+
+        // The History page's parts share one reading of history, the same way the
+        // Overview's widgets share one run of the advisor.
+        $this->app->scoped(HistoryPanel::class);
 
         $this->app->tag([DeadTuples::class, StaleStatistics::class, Wraparound::class], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
@@ -223,12 +230,18 @@ final class VacuumServiceProvider extends ServiceProvider
 
         $this->registerFilamentWidgets();
 
+        $this->registerSchedule();
+
         if ($this->app->runningInConsole()) {
-            $this->commands([CheckCommand::class, InstallCommand::class]);
+            $this->commands([CheckCommand::class, InstallCommand::class, SnapshotCommand::class]);
 
             $this->publishes([
                 __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),
             ], 'vacuum-config');
+
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
+            ], 'vacuum-migrations');
 
             $this->publishes([
                 __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/vacuum'),
@@ -264,6 +277,57 @@ final class VacuumServiceProvider extends ServiceProvider
         foreach (Filament\VacuumPlugin::widgets() as $widget) {
             \Livewire\Livewire::component($widget);
         }
+    }
+
+    /**
+     * Register the snapshot command on the scheduler, when history is on and the
+     * application has left Vacuum to schedule it.
+     *
+     * A null cadence in config means the opposite: the application wires the command
+     * into its own scheduler and Vacuum stays out of it. Either way this only ever
+     * registers a read-then-write of the history tables; it adds nothing to the
+     * inspected database's load beyond the queries the dashboard already runs.
+     */
+    private function registerSchedule(): void
+    {
+        $config = $this->app->make(Repository::class);
+
+        if (! (bool) $config->get('vacuum.enabled', true)) {
+            return;
+        }
+
+        if (! (bool) $config->get('vacuum.history.enabled', false)) {
+            return;
+        }
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) use ($config): void {
+            $cadence = $config->get('vacuum.history.schedule', 'hourly');
+
+            // A null (or blank) cadence means the application schedules the command
+            // itself, so Vacuum registers nothing.
+            if (! is_string($cadence) || $cadence === '') {
+                return;
+            }
+
+            // withoutOverlapping so a snapshot that runs long on a large database is
+            // never started a second time on top of the first.
+            $schedule->command('vacuum:snapshot')->withoutOverlapping()->{$this->cadenceMethod($cadence)}();
+        });
+    }
+
+    /**
+     * The scheduler frequency named by the configured cadence, or hourly when it
+     * names nothing the scheduler recognises. An unknown value should not silently
+     * stop the snapshots; it should fall back to a sensible default.
+     */
+    private function cadenceMethod(string $cadence): string
+    {
+        $recognised = [
+            'everyMinute', 'everyFiveMinutes', 'everyTenMinutes', 'everyFifteenMinutes',
+            'everyThirtyMinutes', 'hourly', 'daily', 'twiceDaily', 'weekly',
+        ];
+
+        return in_array($cadence, $recognised, true) ? $cadence : 'hourly';
     }
 
     /**

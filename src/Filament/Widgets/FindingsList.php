@@ -9,6 +9,8 @@ use Heyosseus\Vacuum\Advisor\Finding;
 use Heyosseus\Vacuum\Advisor\Severity;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Filament\Support\SeverityColor;
+use Heyosseus\Vacuum\History\FindingView;
+use Heyosseus\Vacuum\History\Trend;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\View as ViewFactory;
 use Override;
@@ -41,6 +43,48 @@ final class FindingsList extends Widget
     public function findings(): array
     {
         return app(PanelData::class)->findings();
+    }
+
+    /**
+     * The same findings with history's reading laid over them, in the same order.
+     *
+     * @return list<FindingView>
+     */
+    public function findingViews(): array
+    {
+        return app(PanelData::class)->findingViews();
+    }
+
+    /**
+     * How a finding's number is moving, as a word and a colour, or null when history
+     * has nothing to say — off, too new, or a finding that does not trend. Rising is
+     * the worsening direction for every metric a finding carries, so it reads red.
+     *
+     * @return array{symbol: string, label: string, color: string}|null
+     */
+    public function trend(FindingView $view): ?array
+    {
+        return match ($view->trend) {
+            Trend::Rising => ['symbol' => '▲', 'label' => 'rising', 'color' => '#e11d48'],
+            Trend::Falling => ['symbol' => '▼', 'label' => 'easing', 'color' => '#059669'],
+            default => null,
+        };
+    }
+
+    /**
+     * The forecast in a sentence, or null when none can honestly be drawn.
+     */
+    public function forecast(FindingView $view): ?string
+    {
+        if (! $view->forecast instanceof \Heyosseus\Vacuum\History\Forecast) {
+            return null;
+        }
+
+        if ($view->forecast->days <= 0) {
+            return 'Projected to cross critical imminently at the current rate.';
+        }
+
+        return "Projected to cross critical in about {$view->forecast->days} days at the current rate.";
     }
 
     /**
