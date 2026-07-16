@@ -9,6 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 
 - The statements panel and inspection no longer 500 on a server where `CREATE EXTENSION pg_stat_statements` ran but the library was never listed in `shared_preload_libraries`. The capability probe now reads the preload list and treats the extension as usable only when it is both created and loaded; a role the server hides the list from (no `pg_read_all_settings`) keeps the old trust in `pg_extension`, and a mid-request SQLSTATE `55000` degrades to the guidance finding instead of an error page either way.
+- One inspection throwing no longer 500s the whole dashboard. The advisor now catches each inspection's failure and reports it as an `inspection-failed` Info finding — naming the inspection, keeping the exception message as the impact — so the panels fed by the other inspections keep rendering.
 
 ## [0.1.0] - 2026-07-15
 
