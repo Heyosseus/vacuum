@@ -56,18 +56,26 @@ it('reads a timing in the unit that says something', function (): void {
 });
 
 it('hides the surface where pg_stat_statements is not installed', function (): void {
-    app()->instance(Capabilities::class, new Capabilities(170_000, ['pg_stat_statements'], [], true));
+    $preloaded = ['shared_preload_libraries' => 'pg_stat_statements'];
+
+    app()->instance(Capabilities::class, new Capabilities(170_000, ['pg_stat_statements'], $preloaded, true));
 
     expect(StatementResource::canAccess())->toBeTrue()
         ->and(StatementResource::canViewAny())->toBeTrue();
 
-    app()->instance(Capabilities::class, new Capabilities(170_000, ['plpgsql'], [], true));
+    app()->instance(Capabilities::class, new Capabilities(170_000, ['plpgsql'], $preloaded, true));
 
     expect(StatementResource::canAccess())->toBeFalse();
 
-    // A stranger is out even where the extension is installed.
+    // Created but never preloaded leaves a view that throws rather than answers,
+    // so the surface stays hidden rather than 500 on its first read.
+    app()->instance(Capabilities::class, new Capabilities(170_000, ['pg_stat_statements'], ['shared_preload_libraries' => 'auto_explain'], true));
+
+    expect(StatementResource::canAccess())->toBeFalse();
+
+    // A stranger is out even where the extension works.
     Vacuum::auth(static fn (Request $request): bool => false);
-    app()->instance(Capabilities::class, new Capabilities(170_000, ['pg_stat_statements'], [], true));
+    app()->instance(Capabilities::class, new Capabilities(170_000, ['pg_stat_statements'], $preloaded, true));
 
     expect(StatementResource::canAccess())->toBeFalse();
 });
