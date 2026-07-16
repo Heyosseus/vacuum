@@ -20,24 +20,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Filament is an optional peer supported on both its current majors, so each
+        # is pinned on a leg of its own: left to resolve freely, Composer would take
+        # the newer every time and the older would go untested.
         include:
           - php: '8.3'
             laravel: '11.*'
             testbench: '9.*'
+            filament: '^4.0'
           - php: '8.4'
             laravel: '11.*'
             testbench: '9.*'
+            filament: '^5.0'
           - php: '8.3'
             laravel: '12.*'
             testbench: '10.*'
+            filament: '^4.0'
           # Coverage is identical across the version matrix, so it is collected on
           # a single leg rather than recomputed four times.
           - php: '8.4'
             laravel: '12.*'
             testbench: '10.*'
+            filament: '^5.0'
             coverage: true
 
-    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} / Filament ${{ matrix.filament }}
 
     steps:
       - name: Checkout
@@ -75,14 +82,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/composer
-          key: composer-${{ matrix.php }}-${{ matrix.laravel }}-${{ hashFiles('composer.json') }}
+          key: composer-${{ matrix.php }}-${{ matrix.laravel }}-filament${{ matrix.filament }}-${{ hashFiles('composer.json') }}
           restore-keys: |
+            composer-${{ matrix.php }}-${{ matrix.laravel }}-filament${{ matrix.filament }}-
             composer-${{ matrix.php }}-${{ matrix.laravel }}-
             composer-${{ matrix.php }}-
 
       - name: Install dependencies
         run: |
-          composer require --dev "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer require --dev "orchestra/testbench:${{ matrix.testbench }}" "filament/filament:${{ matrix.filament }}" --no-interaction --no-update
           composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 
       - name: Lint
