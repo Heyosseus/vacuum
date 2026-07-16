@@ -6,9 +6,16 @@ use Heyosseus\Vacuum\Tests\ConsoleTestCase;
 use Heyosseus\Vacuum\Tests\DisabledTestCase;
 use Heyosseus\Vacuum\Tests\FilamentTestCase;
 use Heyosseus\Vacuum\Tests\FilamentUiTestCase;
+use Heyosseus\Vacuum\Tests\HistoryTestCase;
 use Heyosseus\Vacuum\Tests\TestCase;
 
 uses(TestCase::class)->in('Feature', 'Unit');
+
+/*
+ * The history tests need history switched on before boot and its tables in place, so
+ * they run under a case that opts in and migrates around each test.
+ */
+uses(HistoryTestCase::class)->in('History');
 
 /*
  * The master switch, the console switch and the UI mode are all read while routes

@@ -6,6 +6,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **History over time (opt-in).** A `vacuum:snapshot` command records the health score, the findings and the raw per-object metrics behind them into three tables on the application's own database, on a schedule you set or that Vacuum registers for you. Once two snapshots exist, the advisor gains **interval-accurate** `cache-hit-ratio` and `slow-statement` figures — measured over the last interval rather than the life of the server — a climbing / easing / new **direction** on each finding, a **time-to-critical forecast** for freeze age and table size, and a diff of what is newly wrong or newly cleared since the previous snapshot. Surfaced as a **History** page in the Filament panel and a **history** tab on the Blade dashboard, both shown only while history is on.
+- History is off by default and is the package's only write path; it writes exclusively to the storage connection (`VACUUM_HISTORY_CONNECTION`, the application's default when unset) and never to the inspected database. New configuration under `vacuum.history`, and a published migration (`php artisan vendor:publish --tag=vacuum-migrations`).
+
 ## [0.1.0] - 2026-07-15
 
 First release.

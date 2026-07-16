@@ -95,6 +95,7 @@ Authorization is shared, not duplicated: the plugin's `canAccess()` calls the sa
 Everything lands in one **Vacuum** navigation group:
 
 - **Overview** — the health story at a glance: the score and its grade, database vitals (size, table count, cache-hit ratio, live sessions), and charts for findings by severity, the largest tables, and how much index space is read versus never touched. Beneath them, the findings themselves, worst first — each with the statement that would put it right, shown and copied with one click, never run — and a live view of any vacuums PostgreSQL is running at that moment.
+- **History** — where the database has been and where it is heading: the health line over time, what is newly wrong, what has cleared, and what is forecast to cross critical. Appears only when history is switched on — see [History over time](#history-over-time).
 - **Tables** — a read-only resource over `pg_stat_user_tables` with native Filament sort, search, filter and pagination, and a drill-down carrying the same profile and findings as the Blade table page.
 - **Indexes**, **Sessions**, **Statements** — the same read-only treatment over `pg_stat_user_indexes`, `pg_stat_activity` (live, polling) and `pg_stat_statements`. The last hides itself where the extension is not installed.
 
@@ -164,6 +165,40 @@ php artisan vacuum:check --format=json       # score, grade, deductions, finding
 ```
 
 Two things worth knowing. It **never writes** — the remediation is printed for you to read and decide on, exactly as it is on the page. And if Vacuum is disabled it **fails rather than passing**: a check that goes green because it never looked is worse than no check at all.
+
+## History over time
+
+Vacuum is point-in-time by default: every page and every `vacuum:check` reads the database as it is this instant. Switch history on and it records a snapshot on a schedule, so it can tell you which way a number is *moving* — bloat that is growing, a freeze age that climbs and never resets, a cache-hit ratio measured over the last hour rather than over the life of the server.
+
+```env
+VACUUM_HISTORY_ENABLED=true
+```
+
+```bash
+php artisan vendor:publish --tag=vacuum-migrations
+php artisan migrate
+```
+
+Then take a snapshot on a schedule — hourly is a sensible default:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('vacuum:snapshot')->hourly();
+```
+
+Or let Vacuum register that for you: leave `VACUUM_HISTORY_SCHEDULE` at its default and it schedules the command itself. Set it to `null` when you would rather wire it up by hand.
+
+**This is the package's only write path, and it never touches the database it inspects.** Snapshots are written with ordinary Eloquent to your application's own database — the published migration's tables live there — while the inspected server is still only ever read, read-only, through the same rolled-back transaction everything else uses. Point `VACUUM_HISTORY_CONNECTION` at a different connection to keep the history somewhere else again.
+
+Once two snapshots exist, four things a single reading cannot say become available:
+
+- **Interval-accurate numbers.** `cache-hit-ratio` and `slow-statement` are lifetime averages until history can difference two snapshots; then they report what the database actually did *over the last interval*. That is also what quietly clears the false alarm a one-off `VACUUM FULL` leaves behind in the slow-statement list.
+- **Direction.** Each finding is marked climbing, easing or new, so a bloat figure inside its threshold but rising reads differently from the same figure holding steady.
+- **A forecast.** For the numbers that only climb — freeze age, table size — Vacuum fits the recent trend and projects when it will cross the line that makes it critical: *wraparound-critical in about nine days at the current rate*. It stays silent unless it has enough snapshots and the points genuinely sit on a line; a guess wearing the clothes of a measurement is worse than nothing.
+- **What changed.** The findings that are new since the previous snapshot, and the ones that have cleared.
+
+Inside Filament this is a **History** page in the Vacuum group; on the Blade dashboard it is a **history** tab. Both appear only while history is on. Snapshots older than `VACUUM_HISTORY_RETENTION_DAYS` (90 by default) are pruned as each new one is taken.
 
 ## The SQL console
 

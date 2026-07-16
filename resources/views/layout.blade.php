@@ -503,6 +503,11 @@
             <a href="{{ route('vacuum.dashboard') }}"
                @if (request()->routeIs('vacuum.dashboard')) aria-current="page" @endif>findings</a>
 
+            @if (Route::has('vacuum.history'))
+                <a href="{{ route('vacuum.history') }}"
+                   @if (request()->routeIs('vacuum.history')) aria-current="page" @endif>history</a>
+            @endif
+
             @if (Route::has('vacuum.console'))
                 <a href="{{ route('vacuum.console') }}"
                    @if (request()->routeIs('vacuum.console*')) aria-current="page" @endif>console</a>

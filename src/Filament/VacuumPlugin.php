@@ -6,6 +6,7 @@ namespace Heyosseus\Vacuum\Filament;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Heyosseus\Vacuum\Filament\Pages\History;
 use Heyosseus\Vacuum\Filament\Pages\Overview;
 use Heyosseus\Vacuum\Filament\Resources\IndexResource;
 use Heyosseus\Vacuum\Filament\Resources\SessionResource;
@@ -15,6 +16,7 @@ use Heyosseus\Vacuum\Filament\Widgets\DatabaseVitals;
 use Heyosseus\Vacuum\Filament\Widgets\FindingsBySeverity;
 use Heyosseus\Vacuum\Filament\Widgets\FindingsList;
 use Heyosseus\Vacuum\Filament\Widgets\HealthScore;
+use Heyosseus\Vacuum\Filament\Widgets\HealthTimeline;
 use Heyosseus\Vacuum\Filament\Widgets\IndexFootprint;
 use Heyosseus\Vacuum\Filament\Widgets\LargestTables;
 use Heyosseus\Vacuum\Filament\Widgets\RunningVacuums;
@@ -49,6 +51,7 @@ final class VacuumPlugin implements Plugin
         IndexFootprint::class,
         FindingsList::class,
         RunningVacuums::class,
+        HealthTimeline::class,
     ];
 
     public static function make(): self
@@ -77,6 +80,7 @@ final class VacuumPlugin implements Plugin
         $panel
             ->pages([
                 Overview::class,
+                History::class,
             ])
             ->resources([
                 TableResource::class,

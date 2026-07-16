@@ -150,4 +150,58 @@ return [
 
     'ignored_schemas' => ['pg_catalog', 'information_schema', 'pg_toast'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | History
+    |--------------------------------------------------------------------------
+    |
+    | Vacuum is point-in-time by default: every page load and every check runs
+    | the advisor fresh and reports the database as it is this instant. History
+    | records a snapshot on a schedule so the package can tell you which way a
+    | number is moving — bloat that is growing, an xid age that climbs and never
+    | resets, a cache-hit ratio measured over the last hour rather than over the
+    | life of the server.
+    |
+    | This is the package's only write path, and it never touches the inspected
+    | database: snapshots are written with ordinary Eloquent to the connection
+    | below — your application's own database — while the inspected server is
+    | still only ever read, read-only, through the same path everything else uses.
+    |
+    | Off by default. The write path, the schema and the schedule all come into
+    | being only once you turn it on. Publish and run the migration with:
+    |
+    |     php artisan vendor:publish --tag=vacuum-migrations
+    |     php artisan migrate
+    |
+    */
+
+    'history' => [
+        'enabled' => env('VACUUM_HISTORY_ENABLED', false),
+
+        // Where snapshots are stored. Null means the application's default
+        // connection. This is the write connection; it is never the database
+        // Vacuum inspects unless you deliberately point it at the same one.
+        'connection' => env('VACUUM_HISTORY_CONNECTION'),
+
+        // Snapshots older than this are pruned each time a new one is taken, so
+        // the tables do not grow without bound.
+        'retention_days' => env('VACUUM_HISTORY_RETENTION_DAYS', 90),
+
+        // The cadence Vacuum registers the snapshot command at, when you let it
+        // schedule itself. Hourly is fine enough for the interval metrics and
+        // cheap enough to leave running. Set to null to schedule it yourself.
+        'schedule' => env('VACUUM_HISTORY_SCHEDULE', 'hourly'),
+
+        // Only tables at least this large are trended, which keeps the metrics
+        // table bounded on a database that has thousands of small ones.
+        'metric_table_min_bytes' => env('VACUUM_HISTORY_METRIC_TABLE_MIN_BYTES', 10 * 1024 * 1024),
+
+        'forecast' => [
+            // A projection needs enough points behind it to be worth trusting.
+            // Below this many snapshots, Vacuum forecasts nothing rather than
+            // draw a line through three dots and call it the future.
+            'minimum_snapshots' => 12,
+        ],
+    ],
+
 ];
