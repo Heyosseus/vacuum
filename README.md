@@ -10,6 +10,8 @@ Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables
 
 It shows you that statement. It never runs it.
 
+![Vacuum's standalone dashboard: the health grade and the findings that produced it](art/blade-overview.png)
+
 > **Status: 0.1.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
 
 ## What it tells you
@@ -51,6 +53,16 @@ php artisan vacuum:install
 
 `vacuum:install` publishes the config and asks one question: serve the UI as the standalone Blade dashboard, or inside a Filament panel? Answer Blade (the default) and you are done — open `/vacuum`. Prefer to do it by hand? `php artisan vendor:publish --tag=vacuum-config` and open `/vacuum` is the whole of the Blade path.
 
+### The standalone dashboard
+
+Open any table to see its full profile — size, dead rows, freeze age, how it is read and written, and the findings against it — worst first, each with the statement that would fix it.
+
+![A single table's profile in the standalone dashboard](art/blade-table.png)
+
+The built-in SQL console runs every statement inside a read-only transaction that is always rolled back.
+
+![The read-only SQL console](art/blade-console.png)
+
 ## Inside Filament
 
 If your app already runs a [Filament](https://filamentphp.com) v4 panel, Vacuum can live inside it rather than at a separate `/vacuum` URL — the same data the Filament way.
@@ -87,6 +99,16 @@ Everything lands in one **Vacuum** navigation group:
 - **Indexes**, **Sessions**, **Statements** — the same read-only treatment over `pg_stat_user_indexes`, `pg_stat_activity` (live, polling) and `pg_stat_statements`. The last hides itself where the extension is not installed.
 
 Every surface asks that one `Vacuum::auth()` callback, and every one opts out of Filament's tenant scoping — the catalogs Vacuum reads belong to the server, not to any one tenant — so the panel is at home in a multi-tenant install rather than throwing on a relationship these read-only models have no reason to carry.
+
+![The Overview page inside a Filament panel: health, database vitals, and charts](art/filament-overview.png)
+
+![The findings, worst first, each with the statement that would fix it](art/filament-findings.png)
+
+The read-only resources over `pg_stat_user_indexes` and `pg_stat_statements` come with native Filament sort, search, filter and pagination.
+
+![The Indexes resource](art/filament-indexes.png)
+
+![The Statements resource](art/filament-statements.png)
 
 > **The SQL console stays on the Blade UI for now.** It is not yet a Filament page, and `VACUUM_UI=filament` stands the standalone routes down, so if you rely on the console keep the Blade UI until a later release brings it inside the panel.
 
@@ -133,6 +155,8 @@ php artisan vacuum:check
 ```
 
 It exits **non-zero when the advisor finds something critical**, so a migration that ships a duplicate index fails the build, and a staging database drifting toward wraparound fails the nightly job, whether or not anybody was looking.
+
+![The output of php artisan vacuum:check in a terminal](art/cli-check.png)
 
 ```bash
 php artisan vacuum:check --fail-on=warning   # critical, warning, info, or never
