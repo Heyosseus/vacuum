@@ -8,6 +8,7 @@ use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Heyosseus\Vacuum\Advisor\Finding;
 use Heyosseus\Vacuum\Advisor\Severity;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Filament\Support\GradeColor;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Override;
@@ -20,6 +21,8 @@ use Override;
  */
 final class HealthScore extends StatsOverviewWidget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 1;
 
     /**

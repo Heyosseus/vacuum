@@ -17,7 +17,7 @@ beforeEach(function (): void {
     // Leave a table that is mostly dead tuples, so the advisor returns a dead-tuples
     // finding whose subject is a table — the case the recorder gives a metric value to.
     DB::delete('DELETE FROM crates WHERE id > 1500');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 });
 
 afterEach(function (): void {

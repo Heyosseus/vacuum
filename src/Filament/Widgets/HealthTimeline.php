@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum\Filament\Widgets;
 
 use Filament\Widgets\Widget;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Filament\Support\HistoryPanel;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\View as ViewFactory;
@@ -16,6 +17,8 @@ use Override;
  */
 final class HealthTimeline extends Widget
 {
+    use GatedWidget;
+
     protected int|string|array $columnSpan = 'full';
 
     /**

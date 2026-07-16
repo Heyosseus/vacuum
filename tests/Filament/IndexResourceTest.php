@@ -24,7 +24,7 @@ beforeEach(function (): void {
     DB::statement('CREATE INDEX crates_label_index ON crates (label)');
     DB::statement('CREATE UNIQUE INDEX crates_code_unique ON crates (code)');
     DB::insert("INSERT INTO crates (label, code) SELECT 'c' || i, 'k' || i FROM generate_series(1, 50) i");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 });
 
 afterEach(function (): void {

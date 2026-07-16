@@ -15,6 +15,7 @@ function aging(int $xidAge, string $name = 'widgets'): TableStatistic
         deadTuples: 0,
         modificationsSinceAnalyze: 0,
         xidAge: $xidAge,
+        mxidAge: 0,
         lastVacuum: null,
         lastAutovacuum: null,
         lastAnalyze: null,

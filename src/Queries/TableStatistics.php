@@ -52,6 +52,7 @@ final readonly class TableStatistics
             deadTuples: Cast::integer($row['n_dead_tup'] ?? null),
             modificationsSinceAnalyze: Cast::integer($row['n_mod_since_analyze'] ?? null),
             xidAge: Cast::integer($row['xid_age'] ?? null),
+            mxidAge: Cast::integer($row['mxid_age'] ?? null),
             lastVacuum: Cast::timestamp($row['last_vacuum'] ?? null),
             lastAutovacuum: Cast::timestamp($row['last_autovacuum'] ?? null),
             lastAnalyze: Cast::timestamp($row['last_analyze'] ?? null),

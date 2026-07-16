@@ -19,6 +19,7 @@ It shows you that statement. It never runs it.
 | Rule | Finds |
 | --- | --- |
 | `wraparound` | Tables nothing has frozen, on their way to shutting the database down |
+| `multixact-wraparound` | The same road, on the other clock: tables whose row locks nothing has frozen |
 | `autovacuum-disabled` | A server with autovacuum switched off and left off |
 | `dead-tuples` | Tables carrying more deleted-but-unreclaimed rows than they should |
 | `stale-statistics` | Tables the planner is reasoning about from numbers that are no longer true |
@@ -33,7 +34,9 @@ It shows you that statement. It never runs it.
 
 Every finding carries a severity, what the problem costs you, and — where a single statement would fix it — the SQL to run. Findings roll up into a health score out of 100, which is computed *from the findings themselves*, so the grade can never disagree with the list beneath it.
 
-Six of those rules describe a database that is slower than it could be. `wraparound` describes one that **stops**: PostgreSQL counts transactions in 32 bits, and a table nothing freezes drags the whole cluster toward the end of that count, at which point the server refuses every write until it is shut down and vacuumed in single-user mode. It gives no warning of its own, and it does not slow down first.
+Most of those rules describe a database that is slower than it could be. `wraparound` describes one that **stops**: PostgreSQL counts transactions in 32 bits, and a table nothing freezes drags the whole cluster toward the end of that count, at which point the server refuses every write until it is shut down and vacuumed in single-user mode. It gives no warning of its own, and it does not slow down first.
+
+PostgreSQL has **two** of those clocks, and either one running out stops the cluster. The second counts *multixacts* — the objects it allocates when more than one transaction holds a lock on the same row at once, which is ordinary on a table with foreign keys pointing at it or one read with `SELECT ... FOR UPDATE`. It has its own horizon (`autovacuum_multixact_freeze_max_age`, 400 million by default, twice the transaction one) and autovacuum advances it separately. A table under a lock-heavy workload can therefore be perfectly healthy on `wraparound` and be the table that stops your database. `multixact-wraparound` watches that clock. The remedy is the same `VACUUM (FREEZE, ANALYZE)` — only the seeing had to be added.
 
 ## Requirements
 
@@ -218,6 +221,18 @@ WITH written AS (INSERT INTO orders (id) VALUES (1) RETURNING *) SELECT * FROM w
 
 That begins with `WITH`, walks straight past any keyword filter, and writes to your database. What stops it is PostgreSQL, which refuses the write inside a read-only transaction. There is a test that smuggles exactly that statement through and then asserts the table is still empty.
 
+**And the read-only transaction is not the whole story either.** It constrains *this backend's* writes through MVCC. It does not constrain a function that opens a second backend, or effects that happen outside MVCC — and all of these begin with `SELECT`:
+
+```sql
+SELECT dblink('dbname=app', 'DELETE FROM users');  -- a second backend, not read-only
+SELECT pg_read_file('/etc/passwd');                -- reads the server's disk
+SELECT pg_terminate_backend(pid);                  -- kills connections
+```
+
+Vacuum refuses those by name, as another courtesy. **What actually bounds the console is the role it connects as** — and with `VACUUM_CONNECTION` unset that is your application's own role, often the owner of everything. If you turn the console on, give it a dedicated role that owns nothing and has those functions revoked. [SECURITY.md](SECURITY.md) has the grants.
+
+Rows are capped by `VACUUM_CONSOLE_MAX_ROWS` (500), applied by PostgreSQL rather than to the answer: the statement is wrapped in a subquery with a `LIMIT`, so the rows past the cap are never produced. Every statement the console runs is written to the log — who, what, how many rows, how long — and the route is throttled.
+
 `EXPLAIN ANALYZE` really runs the query it explains, so it needs its own switch:
 
 ```env
@@ -244,6 +259,8 @@ Every rule reads its limits from `config/vacuum.php`. The defaults are set for a
     'cache_hit_minimum_blocks' => 100_000,
     'wraparound_xid_age' => 200_000_000,          // match your autovacuum_freeze_max_age
     'wraparound_xid_age_critical' => 1_000_000_000,
+    'wraparound_mxid_age' => 400_000_000,         // match your autovacuum_multixact_freeze_max_age
+    'wraparound_mxid_age_critical' => 1_000_000_000,
     'stale_statistics_ratio' => 0.20,             // autoanalyze fires at 0.10
     'stale_statistics_minimum' => 10_000,
     'stale_statistics_minimum_rows' => 1_000,

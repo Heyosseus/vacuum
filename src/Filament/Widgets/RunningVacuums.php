@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum\Filament\Widgets;
 
 use Filament\Widgets\Widget;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Queries\RunningVacuums as RunningVacuumsQuery;
 use Heyosseus\Vacuum\Values\RunningVacuum;
 use Illuminate\Contracts\View\View;
@@ -22,6 +23,8 @@ use Override;
  */
 final class RunningVacuums extends Widget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 7;
 
     protected int|string|array $columnSpan = 'full';

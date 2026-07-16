@@ -91,3 +91,56 @@ function statStatementsInstalled(): bool
 {
     return Illuminate\Support\Facades\DB::table('pg_extension')->where('extname', 'pg_stat_statements')->exists();
 }
+
+/** The server under test, as PostgreSQL numbers itself: 140012 for 14.12. */
+function serverVersionNumber(): int
+{
+    return (int) Illuminate\Support\Facades\DB::scalar('SHOW server_version_num');
+}
+
+/**
+ * Make the statistics a test just generated visible to the next read of them.
+ *
+ * PostgreSQL accumulates statistics in each backend and applies them on its own
+ * schedule, so a test that reads pg_stat_user_tables straight after a write sees
+ * the state from before it. Every test that asserts on a counter has to close
+ * that gap first, and how it closes depends on the server major:
+ *
+ *   - 15 and up rewrote statistics onto shared memory and shipped
+ *     pg_stat_force_next_flush() with it, which does exactly this and does it
+ *     exactly. Use it where it exists.
+ *
+ *   - 14 has no such function -- and calling it there is what took the whole PG14
+ *     leg red the day the version matrix was added. Statistics go to a separate
+ *     collector process, and a backend only forwards its pending ones at the end
+ *     of a transaction, and then only if PGSTAT_STAT_INTERVAL (500ms) has passed
+ *     since it last did. So there is nothing to force: waiting out the interval
+ *     and then ending one more transaction is the only way to make the backend
+ *     hand them over. The trailing clear_snapshot drops this transaction's cached
+ *     view so the next read fetches what the collector now holds.
+ *
+ * This is a test-harness concern and nothing more. Vacuum itself never calls any
+ * of it: it reads whatever the server is currently prepared to say, which is the
+ * right behaviour on every version.
+ */
+function flushStatistics(): void
+{
+    if (serverVersionNumber() >= 150_000) {
+        Illuminate\Support\Facades\DB::statement('SELECT pg_stat_force_next_flush()');
+
+        return;
+    }
+
+    // Longer than any of those intervals: 14 throttles at 500ms, 15 and up at
+    // 1000ms. Waiting past the larger of the two costs a second on the one leg
+    // that takes this path, and buys a fallback that can be proven on any server
+    // by forcing this branch -- rather than one whose only proof is CI going green
+    // on the single version nobody can run locally.
+    usleep(1_200_000);
+
+    // A transaction end, now that the interval has elapsed, is what actually makes
+    // the backend hand its pending counters over.
+    Illuminate\Support\Facades\DB::select('SELECT 1');
+
+    Illuminate\Support\Facades\DB::statement('SELECT pg_stat_clear_snapshot()');
+}

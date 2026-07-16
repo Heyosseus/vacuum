@@ -25,6 +25,7 @@ use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\Rules\DuplicateIndex;
 use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
 use Heyosseus\Vacuum\Advisor\Rules\InvalidIndex;
+use Heyosseus\Vacuum\Advisor\Rules\MultixactWraparound;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
 use Heyosseus\Vacuum\Advisor\Rules\StaleStatistics;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
@@ -120,7 +121,12 @@ final class VacuumServiceProvider extends ServiceProvider
         // Overview's widgets share one run of the advisor.
         $this->app->scoped(HistoryPanel::class);
 
-        $this->app->tag([DeadTuples::class, StaleStatistics::class, Wraparound::class], self::TABLE_RULES);
+        $this->app->tag([
+            DeadTuples::class,
+            StaleStatistics::class,
+            Wraparound::class,
+            MultixactWraparound::class,
+        ], self::TABLE_RULES);
         $this->app->tag([TableBloat::class], self::BLOAT_RULES);
         $this->app->tag([UnusedIndex::class, InvalidIndex::class], self::INDEX_RULES);
         $this->app->tag([DuplicateIndex::class], self::DUPLICATE_RULES);

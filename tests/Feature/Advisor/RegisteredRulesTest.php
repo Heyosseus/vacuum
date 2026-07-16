@@ -23,7 +23,7 @@ beforeEach(function (): void {
     // has no statistics for the bloat estimate to reconstruct a size from.
     DB::delete('DELETE FROM parcels WHERE id > 500');
     DB::statement('ANALYZE parcels');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 });
 
 afterEach(function (): void {

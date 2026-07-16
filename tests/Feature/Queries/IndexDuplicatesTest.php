@@ -89,6 +89,32 @@ it('does not call two partial indexes with different predicates duplicates', fun
     expect(duplicates())->toBe([]);
 });
 
+/**
+ * Two indexes over the same text column under different collations sort their
+ * entries in genuinely different orders — bytewise under "C", by locale rules
+ * under the database default — and PostgreSQL will only use each for the
+ * collation it was built for. Everything else about them is identical: same
+ * table, same column, same operator class, same options. Only indcollation
+ * separates them, which is exactly why it has to be in the signature. Calling
+ * one a copy of the other means telling somebody to drop an index that is the
+ * only thing serving that ordering.
+ */
+it('does not call two indexes with different collations duplicates', function (): void {
+    DB::statement('CREATE INDEX pallets_label_default ON pallets (label)');
+    DB::statement('CREATE INDEX pallets_label_c ON pallets (label COLLATE "C")');
+
+    expect(duplicates())->toBe([]);
+});
+
+it('does call two indexes with the same explicit collation duplicates', function (): void {
+    // The other half of the same fact: matching collations are still duplicates,
+    // so the fix narrows the signature rather than disabling the rule.
+    DB::statement('CREATE INDEX pallets_label_c ON pallets (label COLLATE "C")');
+    DB::statement('CREATE INDEX pallets_label_c_again ON pallets (label COLLATE "C")');
+
+    expect(duplicates())->toHaveCount(1);
+});
+
 it('does call two partial indexes with the same predicate duplicates', function (): void {
     DB::statement('CREATE INDEX pallets_shipped ON pallets (label) WHERE depot_id IS NULL');
     DB::statement('CREATE INDEX pallets_shipped_again ON pallets (label) WHERE depot_id IS NULL');

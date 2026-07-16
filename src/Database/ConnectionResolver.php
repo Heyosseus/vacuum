@@ -37,4 +37,23 @@ final readonly class ConnectionResolver
 
         return $connection;
     }
+
+    /**
+     * What the connection Vacuum inspects is called, without requiring that it can
+     * be inspected.
+     *
+     * resolve() answers "give me a connection I can promise things about" and throws
+     * when it cannot. Naming one is a different question, and the callers that only
+     * want the name are frequently the ones reporting that resolve() just failed —
+     * a page that has to name the broken connection cannot be the page that rethrows
+     * trying to.
+     */
+    public function name(): string
+    {
+        $name = $this->config->get('vacuum.connection');
+
+        return is_string($name) && $name !== ''
+            ? $name
+            : $this->manager->getDefaultConnection();
+    }
 }

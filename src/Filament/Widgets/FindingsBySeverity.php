@@ -7,6 +7,7 @@ namespace Heyosseus\Vacuum\Filament\Widgets;
 use Filament\Widgets\ChartWidget;
 use Heyosseus\Vacuum\Advisor\Finding;
 use Heyosseus\Vacuum\Advisor\Severity;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Override;
 
@@ -17,6 +18,8 @@ use Override;
  */
 final class FindingsBySeverity extends ChartWidget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 3;
 
     protected ?string $heading = 'Findings by severity';

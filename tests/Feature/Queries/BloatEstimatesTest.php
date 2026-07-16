@@ -21,6 +21,15 @@ function crates(): ?BloatEstimate
         ->firstWhere(fn (BloatEstimate $table): bool => $table->name === 'crates');
 }
 
+/**
+ * Whether PostgreSQL is holding "unknown" rather than a row count for the table:
+ * reltuples = -1, the value it uses since 14 for a relation nothing has analyzed.
+ */
+function unknownRowCount(): bool
+{
+    return (float) DB::scalar("SELECT reltuples FROM pg_class WHERE relname = 'crates'") === -1.0;
+}
+
 it('finds next to no bloat in a table nothing has deleted from', function (): void {
     DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 20000) i");
     DB::statement('ANALYZE crates');
@@ -69,6 +78,37 @@ it('says nothing at all about a table it has no statistics for', function (): vo
     DB::statement('ANALYZE crates');
 
     expect(crates())->toBeNull();
+});
+
+/**
+ * Since PostgreSQL 14, pg_class.reltuples is -1 for a table nothing has analyzed
+ * — "unknown", which is a different fact from zero. Feeding -1 into the page
+ * arithmetic estimates a row count that was never measured, so the table is left
+ * out entirely: an estimate built on an unknown is not an estimate.
+ */
+it('says nothing about a table nothing has ever analyzed', function (): void {
+    DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 20000) i");
+
+    // Rows on disk, and reltuples still -1: pg_class is only updated by VACUUM,
+    // ANALYZE or CREATE INDEX, and none of them has run.
+    expect(unknownRowCount())->toBeTrue()
+        ->and(crates())->toBeNull();
+});
+
+/**
+ * The same unknown, reached by the path where it survives the is_na guard:
+ * TRUNCATE resets reltuples to -1 but leaves the rows in pg_stats behind, so the
+ * table looks analyzed to every other test in the query and still has no row
+ * count anybody measured.
+ */
+it('says nothing about a truncated table whose statistics outlived its rows', function (): void {
+    DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 20000) i");
+    DB::statement('ANALYZE crates');
+    DB::statement('TRUNCATE crates');
+
+    expect(unknownRowCount())->toBeTrue()
+        ->and((int) DB::scalar("SELECT count(*) FROM pg_stats WHERE tablename = 'crates'"))->toBeGreaterThan(0)
+        ->and(crates())->toBeNull();
 });
 
 it('leaves out the schemas the configuration ignores', function (): void {

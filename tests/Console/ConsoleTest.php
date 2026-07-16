@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Heyosseus\Vacuum\Vacuum;
+use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -83,4 +84,53 @@ it('shows only as many rows as it was told to', function (): void {
 
 it('asks for a statement before it runs one', function (): void {
     $this->post('/vacuum/console', ['statement' => ''])->assertSessionHasErrors('statement');
+});
+
+/**
+ * Vacuum's read-only guarantee is a READ ONLY transaction. Inside a transaction
+ * that is already open, beginTransaction() only opens a savepoint, and a savepoint
+ * cannot be made read-only — so the executor refuses rather than run something it
+ * cannot promise anything about. That refusal is a sentence written for a person,
+ * and the console prints it rather than turning it into a 500.
+ *
+ * Capabilities is stubbed here because it is a singleton probed from the same
+ * connection: left to resolve, it would raise the same refusal from inside the
+ * container while the controller was still being built, which is a different
+ * failure from the one under test. A long-lived process — Octane, a queue worker —
+ * is where this shape occurs for real, the probe having succeeded long before the
+ * request that finds a transaction open.
+ */
+function capabilitiesAlreadyProbed(): void
+{
+    app()->instance(Capabilities::class, new Capabilities(
+        serverVersion: 170_005,
+        extensions: ['pg_stat_statements'],
+        settings: ['shared_preload_libraries' => 'pg_stat_statements'],
+        readsAllStatistics: true,
+    ));
+}
+
+it('explains itself rather than crashing when a transaction is already open', function (): void {
+    capabilitiesAlreadyProbed();
+
+    DB::beginTransaction();
+
+    try {
+        $this->post('/vacuum/console', ['statement' => 'SELECT 1'])
+            ->assertOk()
+            ->assertSee('read-only guarantee would not hold');
+    } finally {
+        DB::rollBack();
+    }
+});
+
+it('explains itself rather than crashing when the connection is not postgresql', function (): void {
+    capabilitiesAlreadyProbed();
+
+    config()->set('database.connections.sqlite_probe', ['driver' => 'sqlite', 'database' => ':memory:']);
+    config()->set('vacuum.connection', 'sqlite_probe');
+
+    $this->post('/vacuum/console', ['statement' => 'SELECT 1'])
+        ->assertOk()
+        ->assertSee('inspects PostgreSQL only');
 });

@@ -20,31 +20,68 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Filament is an optional peer supported on both its current majors, so each
-        # is pinned on a leg of its own: left to resolve freely, Composer would take
-        # the newer every time and the older would go untested.
+        # Two axes are being covered here, and they are independent of each other.
+        #
+        # The PHP/Laravel/Filament legs prove the *package* against its supported
+        # peers. Filament is an optional peer supported on both its current majors,
+        # so each is pinned on a leg of its own: left to resolve freely, Composer
+        # would take the newer every time and the older would go untested.
+        #
+        # The `postgres` legs prove the *SQL* against every supported server major.
+        # Vacuum's value is the correctness of queries against system catalogs, and
+        # those catalogs drift between releases: reltuples = -1 arrived in 14,
+        # pg_stat_io in 16, and the vacuum-progress column rename in 17. A cross
+        # product of both axes would be sixteen legs proving nothing extra — catalog
+        # drift cannot depend on the PHP version — so the database majors ride a
+        # single fixed peer combination instead.
         include:
           - php: '8.3'
             laravel: '11.*'
             testbench: '9.*'
             filament: '^4.0'
+            postgres: '17'
           - php: '8.4'
             laravel: '11.*'
             testbench: '9.*'
             filament: '^5.0'
+            postgres: '17'
           - php: '8.3'
             laravel: '12.*'
             testbench: '10.*'
             filament: '^4.0'
+            postgres: '17'
           # Coverage is identical across the version matrix, so it is collected on
           # a single leg rather than recomputed four times.
           - php: '8.4'
             laravel: '12.*'
             testbench: '10.*'
             filament: '^5.0'
+            postgres: '17'
             coverage: true
+          # Database-only legs. Lint, Rector, PHPStan and type coverage are all
+          # Postgres-version-independent, so they are skipped here rather than run
+          # three more times for an identical result; these legs exist to run the
+          # suite's real-database queries against the older majors.
+          - php: '8.4'
+            laravel: '12.*'
+            testbench: '10.*'
+            filament: '^5.0'
+            postgres: '14'
+            database-only: true
+          - php: '8.4'
+            laravel: '12.*'
+            testbench: '10.*'
+            filament: '^5.0'
+            postgres: '15'
+            database-only: true
+          - php: '8.4'
+            laravel: '12.*'
+            testbench: '10.*'
+            filament: '^5.0'
+            postgres: '16'
+            database-only: true
 
-    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} / Filament ${{ matrix.filament }}
+    name: PG ${{ matrix.postgres }} / PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} / Filament ${{ matrix.filament }}
 
     steps:
       - name: Checkout
@@ -52,16 +89,16 @@ jobs:
 
       # Started by hand rather than as a service container: pg_stat_statements is
       # loaded at startup, and a service container cannot be given command
-      # arguments. The version matches the one Vacuum is developed against, so that
-      # a catalog which moved between releases is caught here rather than by a user.
-      - name: Start PostgreSQL
+      # arguments. The major comes from the matrix so that a catalog which moved
+      # between releases is caught here rather than by a user.
+      - name: Start PostgreSQL ${{ matrix.postgres }}
         run: |
           docker run --detach --name postgres \
             --publish 5432:5432 \
             --env POSTGRES_DB=vacuum_test \
             --env POSTGRES_USER=vacuum \
             --env POSTGRES_PASSWORD=secret \
-            postgres:17 -c shared_preload_libraries=pg_stat_statements
+            postgres:${{ matrix.postgres }} -c shared_preload_libraries=pg_stat_statements
 
           until docker exec postgres pg_isready --username vacuum --quiet; do sleep 1; done
 
@@ -94,15 +131,19 @@ jobs:
           composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 
       - name: Lint
+        if: ${{ ! matrix.database-only }}
         run: composer test:lint
 
       - name: Refactor check
+        if: ${{ ! matrix.database-only }}
         run: composer test:refacto
 
       - name: Static analysis
+        if: ${{ ! matrix.database-only }}
         run: composer test:types
 
       - name: Type coverage
+        if: ${{ ! matrix.database-only }}
         run: composer test:type-coverage
 
       # Only the coverage leg pays for line-coverage collection and the 100%

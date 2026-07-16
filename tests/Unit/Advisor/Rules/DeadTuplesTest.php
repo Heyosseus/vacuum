@@ -15,6 +15,7 @@ function table(int $live, int $dead, string $name = 'widgets', string $schema = 
         deadTuples: $dead,
         modificationsSinceAnalyze: 0,
         xidAge: 0,
+        mxidAge: 0,
         lastVacuum: null,
         lastAutovacuum: null,
         lastAnalyze: null,

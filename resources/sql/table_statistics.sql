@@ -8,6 +8,13 @@
 -- and keeps climbing is one nothing is freezing, and at the far end of that
 -- road PostgreSQL stops accepting writes.
 --
+-- relminmxid is the same fact for the other clock. A multixact is allocated when
+-- several transactions hold a lock on one row at once, and they are numbered by
+-- their own 32-bit counter with their own horizon (autovacuum_multixact_freeze_max_age,
+-- 400 million by default). Both ages have to be read, because a table under a
+-- lock-heavy workload can sit at a healthy relfrozenxid and still be the one that
+-- stops the cluster.
+--
 -- The one binding is a comma separated list of schemas to ignore. A file cannot
 -- grow a placeholder per schema the way an assembled string can, so PostgreSQL
 -- splits the list itself and the binding count stays at one.
@@ -18,6 +25,7 @@ SELECT
     s.n_dead_tup,
     s.n_mod_since_analyze,
     age(c.relfrozenxid) AS xid_age,
+    mxid_age(c.relminmxid) AS mxid_age,
     s.last_vacuum,
     s.last_autovacuum,
     s.last_analyze,

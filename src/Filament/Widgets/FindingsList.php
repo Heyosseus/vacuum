@@ -7,6 +7,7 @@ namespace Heyosseus\Vacuum\Filament\Widgets;
 use Filament\Widgets\Widget;
 use Heyosseus\Vacuum\Advisor\Finding;
 use Heyosseus\Vacuum\Advisor\Severity;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Filament\Support\SeverityColor;
 use Heyosseus\Vacuum\History\FindingView;
@@ -22,6 +23,8 @@ use Override;
  */
 final class FindingsList extends Widget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 6;
 
     protected int|string|array $columnSpan = 'full';

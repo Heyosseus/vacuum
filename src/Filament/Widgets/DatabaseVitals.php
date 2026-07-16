@@ -6,6 +6,7 @@ namespace Heyosseus\Vacuum\Filament\Widgets;
 
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Filament\Models\Session as SessionModel;
 use Heyosseus\Vacuum\Filament\Models\Table as TableModel;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
@@ -21,6 +22,8 @@ use Override;
  */
 final class DatabaseVitals extends StatsOverviewWidget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 2;
 
     /**
