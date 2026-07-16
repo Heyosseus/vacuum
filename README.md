@@ -1,5 +1,9 @@
 # Vacuum
 
+[![Latest Version](https://img.shields.io/packagist/v/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
+[![Total Downloads](https://img.shields.io/packagist/dt/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
+[![License](https://img.shields.io/packagist/l/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
+
 **A PostgreSQL monitoring and tuning dashboard for Laravel.**
 
 Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_stat_activity`, `pg_stat_database`, `pg_stat_statements`, `pg_class` — and turns it into a page that says what is wrong, what it is costing you, and the statement that would put it right.
