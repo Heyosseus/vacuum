@@ -16,16 +16,6 @@ afterEach(function (): void {
     DB::statement('DROP SCHEMA IF EXISTS archive CASCADE');
 });
 
-/**
- * PostgreSQL accumulates statistics in each backend and flushes them to shared
- * memory at its own pace, so a test that reads them straight after a write sees
- * nothing. pg_stat_force_next_flush makes the pending counters visible now.
- */
-function flushStatistics(): void
-{
-    DB::statement('SELECT pg_stat_force_next_flush()');
-}
-
 function widgets(): TableStatistic
 {
     $table = collect(app(TableStatistics::class)->all())
