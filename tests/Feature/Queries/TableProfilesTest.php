@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 beforeEach(function (): void {
     DB::statement('DROP TABLE IF EXISTS crates');
     DB::statement('CREATE TABLE crates (id serial PRIMARY KEY, label text, note text)');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 });
 
 afterEach(function (): void {
@@ -27,7 +27,7 @@ it('has nothing to say about a table that is not there', function (): void {
 
 it('measures the four sizes separately', function (): void {
     DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 500) i");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     $crates = profile();
 
@@ -42,7 +42,7 @@ it('measures the four sizes separately', function (): void {
 it('counts how the table was read', function (): void {
     DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 500) i");
     DB::select('SELECT count(*) FROM crates');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     expect(profile()->sequentialScans)->toBeGreaterThan(0)
         ->and(profile()->sequentialShare())->toBe(1.0);
@@ -61,7 +61,7 @@ it('sees the fillfactor decide whether an update rewrites the indexes', function
 
     DB::update("UPDATE crates SET label = label || '!'");
     DB::update("UPDATE roomy SET label = label || '!'");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     $packed = profile();
     $roomy = app(TableProfiles::class)->find('public', 'roomy');
@@ -76,7 +76,7 @@ it('sees the fillfactor decide whether an update rewrites the indexes', function
 
 it('works out the number of dead rows autovacuum is waiting for', function (): void {
     DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 1000) i");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     // PostgreSQL's defaults: 50 dead rows, plus a fifth of the table.
     expect(profile()->vacuumsAt())->toBe(50 + (int) (0.2 * 1000))
@@ -86,7 +86,7 @@ it('works out the number of dead rows autovacuum is waiting for', function (): v
 it('lets a table overrule the server about when it is vacuumed', function (): void {
     DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 1000) i");
     DB::statement('ALTER TABLE crates SET (autovacuum_vacuum_scale_factor = 0.01)');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     // The reloption wins, which is the whole point of reading both.
     expect(profile()->vacuumScaleFactor)->toBe(0.01)
@@ -96,7 +96,7 @@ it('lets a table overrule the server about when it is vacuumed', function (): vo
 
 it('does not call a fillfactor an autovacuum setting', function (): void {
     DB::statement('ALTER TABLE crates SET (fillfactor = 80)');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     // The table has a storage parameter, but autovacuum is still the server's.
     expect(profile()->tuned)->toBeFalse();

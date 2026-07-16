@@ -12,7 +12,7 @@ beforeEach(function (): void {
     DB::statement('CREATE TABLE pallets (id serial PRIMARY KEY, label text)');
     DB::statement('CREATE INDEX pallets_label_index ON pallets (label)');
     DB::insert("INSERT INTO pallets (label) SELECT 'pallet ' || i FROM generate_series(1, 5000) i");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 });
 
 afterEach(function (): void {
@@ -39,7 +39,7 @@ it('counts the scans an index has served', function (): void {
     // thing, so the planner has to be talked out of it.
     DB::statement('SET enable_seqscan = off');
     DB::select("SELECT id FROM pallets WHERE label = 'pallet 42'");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     expect(index('pallets_label_index')?->scans)->toBeGreaterThan(0);
 });

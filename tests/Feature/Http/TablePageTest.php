@@ -13,7 +13,7 @@ beforeEach(function (): void {
     DB::statement('CREATE TABLE crates (id serial PRIMARY KEY, label text)');
     DB::statement('CREATE INDEX crates_label_index ON crates (label)');
     DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 300) i");
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 });
 
 afterEach(function (): void {

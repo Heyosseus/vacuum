@@ -46,7 +46,7 @@ it('shows what the advisor found on the database it is pointed at', function ():
     DB::statement('CREATE TABLE gadgets (id serial PRIMARY KEY)');
     DB::insert('INSERT INTO gadgets SELECT generate_series(1, 5000)');
     DB::delete('DELETE FROM gadgets');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     Vacuum::auth(static fn (Request $request): bool => true);
 
@@ -74,7 +74,7 @@ it('cannot award a grade its own findings disagree with', function (): void {
     DB::statement('CREATE TABLE gadgets (id serial PRIMARY KEY)');
     DB::insert('INSERT INTO gadgets SELECT generate_series(1, 5000)');
     DB::delete('DELETE FROM gadgets');
-    DB::statement('SELECT pg_stat_force_next_flush()');
+    flushStatistics();
 
     Vacuum::auth(static fn (Request $request): bool => true);
 
