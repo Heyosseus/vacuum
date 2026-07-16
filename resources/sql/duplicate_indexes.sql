@@ -3,10 +3,15 @@
 -- Two indexes are the same index when they cover the same table, the same
 -- columns in the same order, with the same operator classes, the same collation
 -- and sort options, the same expression and the same partial predicate. That
--- whole list is what indkey, indclass, indoption, indexprs and indpred hold, so
--- it is what the signature is built from. Comparing the text of pg_get_indexdef
--- would be easier and wrong: it differs on whitespace and agrees on things that
--- are not equal.
+-- whole list is what indkey, indclass, indcollation, indoption, indexprs and
+-- indpred hold, so it is what the signature is built from. Comparing the text of
+-- pg_get_indexdef would be easier and wrong: it differs on whitespace and agrees
+-- on things that are not equal.
+--
+-- indcollation earns its place: two indexes over one text column under different
+-- collations agree on every other part of the signature, and sort in different
+-- orders. PostgreSQL will only use each for the collation it was built for, so
+-- they are not copies of each other however identical the rest of them looks.
 --
 -- This deliberately does not report an index whose columns are merely a prefix of
 -- another's. An index on (a) is redundant against (a, b) for lookups on a, but it
@@ -27,6 +32,7 @@ WITH indexed AS (
         catalog.indrelid::text
             ||' '|| catalog.indkey::text
             ||' '|| catalog.indclass::text
+            ||' '|| catalog.indcollation::text
             ||' '|| catalog.indoption::text
             ||' '|| coalesce(pg_get_expr(catalog.indexprs, catalog.indrelid), '')
             ||' '|| coalesce(pg_get_expr(catalog.indpred, catalog.indrelid), '') AS signature,
