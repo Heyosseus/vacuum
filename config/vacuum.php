@@ -75,12 +75,44 @@ return [
     |--------------------------------------------------------------------------
     |
     | The console executes statements inside a READ ONLY transaction that is
-    | always rolled back, so PostgreSQL itself rejects any write. It is still
-    | disabled by default: enabling it lets an authorized user read every row
-    | in your database, which is a decision that should be made deliberately.
+    | always rolled back. It is disabled by default: enabling it lets an
+    | authorized user read every row in your database, which is a decision that
+    | should be made deliberately.
+    |
+    | Read this part carefully, because the guarantee is narrower than it looks.
+    | A READ ONLY transaction constrains *this* backend's writes to MVCC storage.
+    | It does not constrain a function that opens a second connection, and it does
+    | not constrain side effects that happen outside MVCC. All of these begin with
+    | SELECT and none of them are stopped by the transaction:
+    |
+    |     SELECT dblink('dbname=app', 'DELETE FROM users');  -- a second backend
+    |     SELECT pg_read_file('/etc/passwd');                -- reads the disk
+    |     SELECT pg_terminate_backend(pid);                  -- kills connections
+    |     SELECT lo_export(oid, '/tmp/anywhere');            -- writes a file
+    |
+    | The thing that actually stops those is the *role*. The console's power is
+    | bounded by the privileges of whatever role 'connection' above resolves to,
+    | and by nothing else. Point it at a dedicated role that owns nothing, and
+    | revoke EXECUTE on the escapes:
+    |
+    |     CREATE ROLE vacuum_reader LOGIN PASSWORD '...' NOSUPERUSER;
+    |     GRANT pg_read_all_stats TO vacuum_reader;
+    |     REVOKE EXECUTE ON FUNCTION pg_read_file(text), pg_ls_dir(text),
+    |         pg_terminate_backend(int), pg_cancel_backend(int),
+    |         lo_export(oid, text), lo_import(text) FROM PUBLIC, vacuum_reader;
+    |     -- and, if the extensions exist at all:
+    |     REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM vacuum_reader;
+    |
+    | With VACUUM_CONNECTION unset, the console runs as your application's own
+    | role -- frequently the owner of everything, sometimes a superuser. Vacuum's
+    | own statement guard turns away the obvious cases as a courtesy, but a word
+    | list is not a security boundary and it is not offered as one.
     |
     | 'timeout' is the per-statement timeout in milliseconds (statement_timeout).
-    | 'max_rows' caps the rows returned to the browser.
+    | 'max_rows' caps the rows, and is asked of PostgreSQL rather than applied to
+    | the answer: the console wraps your statement so the rows past the cap are
+    | never produced. It bounds the number of rows and not the width of one, so a
+    | single enormous value is still bounded only by 'timeout' and memory_limit.
     |
     */
 
@@ -93,6 +125,20 @@ return [
         // transaction still stops it writing, but nothing stops it reading a
         // billion rows, so it is off until you say otherwise.
         'explain_analyze' => env('VACUUM_CONSOLE_EXPLAIN_ANALYZE', false),
+
+        // Every statement the console runs is written to the log: who ran it, what
+        // it was, how many rows it returned and how long it took. A console that
+        // can read every row in production and records nothing about who read them
+        // is a gap somebody eventually has to answer for. Null uses the
+        // application's default channel.
+        'audit' => env('VACUUM_CONSOLE_AUDIT', true),
+        'audit_channel' => env('VACUUM_CONSOLE_AUDIT_CHANNEL'),
+
+        // Laravel throttle notation: attempts,minutes. The console is an
+        // authenticated surface, so this is not a login defence -- it is a bound on
+        // how fast one authorized reader can drive expensive queries at the server
+        // it is pointed at.
+        'rate_limit' => env('VACUUM_CONSOLE_RATE_LIMIT', '30,1'),
     ],
 
     /*
@@ -130,6 +176,17 @@ return [
         // to accept another write.
         'wraparound_xid_age' => 200_000_000,
         'wraparound_xid_age_critical' => 1_000_000_000,
+
+        // The same question asked of the other wraparound clock. PostgreSQL
+        // allocates a multixact when more than one transaction holds a lock on the
+        // same row at once, numbers them from a separate 32-bit counter, and stops
+        // the cluster if that counter runs out — independently of the transaction
+        // one above. The warning default is 400 million because that is
+        // autovacuum_multixact_freeze_max_age's own default: twice the transaction
+        // horizon, so this is deliberately not the same number as
+        // 'wraparound_xid_age'. Raise it to match if you have raised that setting.
+        'wraparound_mxid_age' => 400_000_000,
+        'wraparound_mxid_age_critical' => 1_000_000_000,
 
         'bloat_bytes' => 100 * 1024 * 1024,
         'unused_index_min_size' => 1024 * 1024,
