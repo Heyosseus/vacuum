@@ -24,8 +24,10 @@ use UnitEnum;
  * parameters stripped, summed as one -- so the totals mean something and the text is
  * deliberately unrunnable.
  *
- * The extension is optional, and where it is missing this surface hides itself rather
- * than render a grid of zeroes or reach for a view that is not there.
+ * The extension is optional, and where it is missing — or created without the library
+ * ever being preloaded, which leaves a view that throws rather than answers — this
+ * surface hides itself rather than render a grid of zeroes or 500 on a view that is
+ * not really there.
  */
 final class StatementResource extends Resource
 {
@@ -47,7 +49,7 @@ final class StatementResource extends Resource
         return 'statement';
     }
 
-    /** The surface exists only when pg_stat_statements does; without it there is nothing to read. */
+    /** The surface exists only when pg_stat_statements works; without it there is nothing to read. */
     #[Override]
     public static function canAccess(): bool
     {
@@ -62,7 +64,7 @@ final class StatementResource extends Resource
 
     private static function available(): bool
     {
-        return app(Capabilities::class)->has('pg_stat_statements');
+        return app(Capabilities::class)->tracksStatements();
     }
 
     /**

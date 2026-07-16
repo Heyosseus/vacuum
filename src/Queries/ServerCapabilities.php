@@ -22,6 +22,7 @@ final readonly class ServerCapabilities
      */
     private const array SETTINGS = [
         'autovacuum',
+        'shared_preload_libraries',
         'track_activities',
         'track_counts',
         'track_io_timing',
