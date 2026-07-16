@@ -86,6 +86,48 @@ it('reports how far a table has fallen behind the transaction horizon', function
         ->and(widgets()->transactionBudgetSpent())->toBeLessThan(0.01);
 });
 
+it('reports how far a table has fallen behind the multixact horizon', function (): void {
+    flushStatistics();
+
+    expect(widgets()->mxidAge)->toBeGreaterThanOrEqual(0)
+        ->and(widgets()->mxidAge)->toBeLessThan(TableStatistic::MULTIXACT_BUDGET)
+        ->and(widgets()->multixactBudgetSpent())->toBeLessThan(0.01);
+});
+
+/**
+ * The multixact clock only moves when more than one transaction holds a lock on
+ * the same row at once — that is the condition PostgreSQL allocates a multixact
+ * for, and a single locker never creates one. Two concurrent FOR SHARE holders
+ * is the smallest thing that does, so this proves Vacuum is reading the clock
+ * that lock-heavy workloads actually advance, rather than a column that happens
+ * to parse.
+ */
+it('sees the multixact age move when two transactions lock the same row at once', function (): void {
+    DB::insert("INSERT INTO widgets (name) SELECT 'widget ' || i FROM generate_series(1, 3) i");
+    DB::statement('VACUUM (FREEZE) widgets');
+
+    $before = widgets()->mxidAge;
+
+    // Separate backends: a multixact needs two live transactions at the same
+    // instant, which one connection cannot produce.
+    $config = config('database.connections.'.DB::getDefaultConnection());
+    $dsn = "pgsql:host={$config['host']};port={$config['port']};dbname={$config['database']}";
+
+    $first = new PDO($dsn, $config['username'], $config['password']);
+    $second = new PDO($dsn, $config['username'], $config['password']);
+
+    $first->exec('BEGIN');
+    $first->exec('SELECT * FROM widgets WHERE id = 1 FOR SHARE');
+    $second->exec('BEGIN');
+    $second->exec('SELECT * FROM widgets WHERE id = 1 FOR SHARE');
+    $first->exec('COMMIT');
+    $second->exec('COMMIT');
+
+    flushStatistics();
+
+    expect(widgets()->mxidAge)->toBeGreaterThan($before);
+});
+
 it('freezes a table back to the present when it is vacuumed', function (): void {
     DB::statement('VACUUM (FREEZE) widgets');
     flushStatistics();

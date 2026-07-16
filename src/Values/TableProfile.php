@@ -32,6 +32,7 @@ final readonly class TableProfile
         public int $deadTuples,
         public int $modificationsSinceAnalyze,
         public int $xidAge,
+        public int $mxidAge,
         public int $heapBytes,
         public int $indexBytes,
         public int $toastBytes,

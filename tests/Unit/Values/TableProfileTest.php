@@ -24,6 +24,7 @@ function profiled(
         deadTuples: $dead,
         modificationsSinceAnalyze: 0,
         xidAge: 0,
+        mxidAge: 0,
         heapBytes: 0,
         indexBytes: 0,
         toastBytes: 0,

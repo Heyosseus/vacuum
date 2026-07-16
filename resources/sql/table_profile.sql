@@ -34,7 +34,12 @@ SELECT
     stats.last_analyze,
     stats.last_autoanalyze,
 
+    -- Both wraparound clocks, because they run independently: relfrozenxid is
+    -- advanced by freezing rows, relminmxid by freezing the row locks that several
+    -- transactions held at once, and a table can be current on one and far behind
+    -- on the other.
     age(tables.relfrozenxid) AS xid_age,
+    mxid_age(tables.relminmxid) AS mxid_age,
 
     pg_relation_size(tables.oid) AS heap_bytes,
     pg_indexes_size(tables.oid) AS index_bytes,

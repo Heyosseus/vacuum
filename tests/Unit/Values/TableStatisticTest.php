@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Carbon\CarbonImmutable;
 use Heyosseus\Vacuum\Values\TableStatistic;
 
-function statistic(int $live = 0, int $dead = 0, ?CarbonImmutable $vacuum = null, ?CarbonImmutable $autovacuum = null, int $xidAge = 0): TableStatistic
+function statistic(int $live = 0, int $dead = 0, ?CarbonImmutable $vacuum = null, ?CarbonImmutable $autovacuum = null, int $xidAge = 0, int $mxidAge = 0): TableStatistic
 {
     return new TableStatistic(
         schema: 'public',
@@ -14,6 +14,7 @@ function statistic(int $live = 0, int $dead = 0, ?CarbonImmutable $vacuum = null
         deadTuples: $dead,
         modificationsSinceAnalyze: 0,
         xidAge: $xidAge,
+        mxidAge: $mxidAge,
         lastVacuum: $vacuum,
         lastAutovacuum: $autovacuum,
         lastAnalyze: null,
@@ -60,6 +61,7 @@ it('takes the most recent of a manual and an automatic analyze', function (): vo
         deadTuples: 0,
         modificationsSinceAnalyze: 0,
         xidAge: 0,
+        mxidAge: 0,
         lastVacuum: null,
         lastAutovacuum: null,
         lastAnalyze: $manual,
@@ -81,6 +83,25 @@ it('measures its freeze age against the transactions postgresql can count', func
 
 it('has spent none of the budget the moment it is frozen', function (): void {
     expect(statistic(xidAge: 0)->transactionBudgetSpent())->toBe(0.0);
+});
+
+it('measures its multixact age against the multixacts postgresql can count', function (): void {
+    // Half of the 2,147,483,647 multixact ids the server can tell apart.
+    expect(statistic(mxidAge: 1_073_741_823)->multixactBudgetSpent())->toBeGreaterThan(0.499)
+        ->and(statistic(mxidAge: 1_073_741_823)->multixactBudgetSpent())->toBeLessThan(0.501);
+});
+
+it('has spent none of the multixact budget the moment its row locks are frozen', function (): void {
+    expect(statistic(mxidAge: 0)->multixactBudgetSpent())->toBe(0.0);
+});
+
+// The two clocks are counted separately, and a table that is behind on one is not
+// thereby behind on the other. This is the whole reason both are read.
+it('keeps the two wraparound clocks independent of each other', function (): void {
+    $table = statistic(xidAge: 0, mxidAge: 1_073_741_823);
+
+    expect($table->transactionBudgetSpent())->toBe(0.0)
+        ->and($table->multixactBudgetSpent())->toBeGreaterThan(0.499);
 });
 
 it('reports the only vacuum it has had', function (): void {

@@ -51,6 +51,7 @@ final readonly class TableProfiles
             deadTuples: Cast::integer($row['n_dead_tup'] ?? null),
             modificationsSinceAnalyze: Cast::integer($row['n_mod_since_analyze'] ?? null),
             xidAge: Cast::integer($row['xid_age'] ?? null),
+            mxidAge: Cast::integer($row['mxid_age'] ?? null),
 
             heapBytes: Cast::integer($row['heap_bytes'] ?? null),
             indexBytes: Cast::integer($row['index_bytes'] ?? null),
