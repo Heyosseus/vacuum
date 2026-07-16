@@ -50,4 +50,53 @@ final readonly class Capabilities
     {
         return ($this->settings[$setting] ?? 'off') === 'on';
     }
+
+    /**
+     * Whether a library was loaded when the server started.
+     *
+     * shared_preload_libraries is a comma-separated list whose entries may be
+     * quoted or padded, so each entry is compared whole rather than by
+     * substring: a server preloading pg_stat_statements_plus has not preloaded
+     * pg_stat_statements.
+     */
+    public function preloaded(string $library): bool
+    {
+        $entries = explode(',', $this->settings['shared_preload_libraries'] ?? '');
+
+        foreach ($entries as $entry) {
+            if (trim($entry, " \t\"") === $library) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether pg_stat_statements is actually collecting query statistics.
+     *
+     * CREATE EXTENSION succeeds even on a server that never preloaded the
+     * library, and the view it creates then throws on the first read rather
+     * than answers. Only the two together — created in this database and
+     * loaded at startup — mean there is anything to ask.
+     *
+     * The server only shows shared_preload_libraries to roles carrying
+     * pg_read_all_settings, so a probe that came home without it proves
+     * nothing either way. That one reads as loaded rather than as off:
+     * assuming off would blind the panel for the modest roles most
+     * applications connect with, on the very servers where the extension
+     * works.
+     */
+    public function tracksStatements(): bool
+    {
+        if (! $this->has('pg_stat_statements')) {
+            return false;
+        }
+
+        if (! array_key_exists('shared_preload_libraries', $this->settings)) {
+            return true;
+        }
+
+        return $this->preloaded('pg_stat_statements');
+    }
 }
