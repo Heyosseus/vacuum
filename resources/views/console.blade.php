@@ -16,9 +16,18 @@
                           placeholder="SELECT relname, n_dead_tup FROM pg_stat_user_tables ORDER BY n_dead_tup DESC">{{ $statement }}</textarea>
 
                 <div class="console__foot">
+                    {{-- The promise, stated as narrowly as it is actually true. A
+                         READ ONLY transaction stops this backend writing through
+                         MVCC; it does not stop a function that opens a second
+                         connection, or one with a side effect outside MVCC. What
+                         bounds those is the role this connects as. Saying
+                         "PostgreSQL refuses the write" full stop was a claim the
+                         database does not make. --}}
                     <p class="promise">
-                        Runs inside a <b>read-only transaction</b> that is always rolled back.
-                        PostgreSQL refuses the write, not this form.
+                        Runs inside a <b>read-only transaction</b> that is always rolled back,
+                        so PostgreSQL refuses the write rather than this form.
+                        Beyond that, this console can do whatever
+                        <b>{{ $connection }}</b>'s role may do &mdash; grant it little.
                     </p>
 
                     <button type="submit" class="run">Run</button>
@@ -42,13 +51,17 @@
         <section class="panel">
             <div class="panel__bar">
                 <span>Result</span>
+                {{-- A capped result cannot say how many rows there were: finding out
+                     means producing them all, which is the thing the cap prevents.
+                     So it says what it knows -- the first N, and there was more. --}}
                 <span class="right">
-                    {{ number_format($result->found) }} {{ Str::plural('row', $result->found) }}
-                    in {{ number_format($result->milliseconds, 1) }} ms
-
-                    @if ($result->truncated())
-                        · showing the first {{ number_format(count($result->rows)) }}
+                    @if ($result->capped)
+                        first {{ number_format(count($result->rows)) }} {{ Str::plural('row', count($result->rows)) }}, there are more
+                    @else
+                        {{ number_format(count($result->rows)) }} {{ Str::plural('row', count($result->rows)) }}
                     @endif
+
+                    in {{ number_format($result->milliseconds, 1) }} ms
                 </span>
             </div>
 

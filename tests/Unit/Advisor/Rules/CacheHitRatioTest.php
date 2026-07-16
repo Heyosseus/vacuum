@@ -42,6 +42,21 @@ it('raises its voice when the cache is missing one read in ten', function (): vo
         ->toBe(Severity::Critical);
 });
 
+/**
+ * The headline ratio comes from pg_stat_database, which counts every block the
+ * database read — heap, index and TOAST alike. The drill-down that names the
+ * tables responsible counted only heap blocks, so on an index-heavy workload it
+ * pointed at whichever tables happened to scan their heaps and stayed silent
+ * about the indexes actually doing the missing. The two numbers have to be
+ * measuring the same thing or the list does not explain the score above it.
+ */
+it('counts index blocks alongside heap blocks when naming the tables responsible', function (): void {
+    $finding = app(CacheHitRatio::class)->inspect(blocks(hit: 950_000, read: 50_000));
+
+    expect($finding?->query)->toContain('idx_blks_hit')
+        ->and($finding?->query)->toContain('idx_blks_read');
+});
+
 it('offers no statement to run, because there is not one', function (): void {
     // The fix is shared_buffers, and the right value depends on the machine. A
     // dashboard that hands you an ALTER SYSTEM with a number in it is guessing.

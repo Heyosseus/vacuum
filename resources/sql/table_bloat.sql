@@ -60,7 +60,24 @@ FROM (
                     100
                 ) AS fillfactor,
                 current_setting('block_size')::numeric AS bs,
-                CASE WHEN version() ~ 'mingw32' OR version() ~ '64-bit|x86_64|ppc64|ia64|amd64' THEN 8 ELSE 4 END AS ma,
+                -- MAXALIGN, which decides how much padding each row carries. Eight
+                -- on a 64-bit build, four on a 32-bit one, and getting it wrong
+                -- understates the padding, understates the size the table ought to
+                -- be, and so overstates the bloat of every table on the server.
+                --
+                -- aarch64/arm64 is here because every ARM64 server -- Graviton,
+                -- Apple silicon, most modern ARM cloud -- matched none of the other
+                -- alternatives and silently fell to 4. Reading it out of version()
+                -- is a heuristic and this list is the evidence: it is a string
+                -- match against build banners, and the honest fix is to probe the
+                -- alignment from a known type width rather than to keep adding
+                -- architectures to an alternation as each one is discovered.
+                CASE
+                    WHEN version() ~ 'mingw32'
+                        OR version() ~ '64-bit|x86_64|ppc64|ia64|amd64|aarch64|arm64'
+                    THEN 8
+                    ELSE 4
+                END AS ma,
                 24 AS page_hdr,
                 23
                     + CASE WHEN max(coalesce(s.null_frac, 0)) > 0 THEN (7 + count(s.attname)) / 8 ELSE 0::int END
@@ -80,6 +97,18 @@ FROM (
             WHERE NOT att.attisdropped
                 AND tbl.relkind IN ('r', 'm')
                 AND ns.nspname <> ALL (string_to_array(?, ','))
+                -- Since PostgreSQL 14, reltuples is -1 for a relation nothing has
+                -- analyzed: "unknown", which is a different fact from zero and not
+                -- one the arithmetic below can use. It mostly arrives with
+                -- relpages = 0, which the is_na guard and the byte threshold would
+                -- catch between them, but not always: TRUNCATE resets reltuples to
+                -- -1 and leaves the pg_stats rows behind, so the table looks
+                -- analyzed to every other test here. An estimate reconstructed from
+                -- a row count nobody measured is a guess wearing the clothes of a
+                -- measurement, so the table is dropped instead. relpages = 0 goes
+                -- with it: a table occupying no pages has no space to waste.
+                AND tbl.reltuples >= 0
+                AND tbl.relpages > 0
             GROUP BY ns.nspname, tbl.relname, tbl.reltuples, tbl.relpages, toast.relpages, toast.reltuples, tbl.reloptions
         ) AS columns
     ) AS rows

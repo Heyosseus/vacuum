@@ -33,26 +33,48 @@ final readonly class LinearFit
             return null;
         }
 
-        $sumX = $sumY = $sumXY = $sumXX = 0.0;
+        $sumX = $sumY = 0.0;
 
         foreach ($points as [$x, $y]) {
             $sumX += $x;
             $sumY += $y;
-            $sumXY += $x * $y;
-            $sumXX += $x * $x;
         }
 
-        $denominator = ($n * $sumXX) - ($sumX * $sumX);
+        $meanX = $sumX / $n;
+        $meanY = $sumY / $n;
+
+        // x arrives as a unix timestamp — around 1.78 billion — and the textbook
+        // form of this computes n·Σx² − (Σx)², which at that magnitude subtracts
+        // two numbers near 4e20 to produce one near 2e10. Fifteen significant
+        // digits go in and about nine come out; the rest is cancellation.
+        //
+        // Centering each x on the mean first makes both sums small and the
+        // subtraction unnecessary: the deviations are of the order of the spacing
+        // between snapshots rather than of the epoch. The slope is unchanged by a
+        // shift along x, so this costs nothing and the intercept is shifted back
+        // below.
+        $covariance = $variance = 0.0;
+
+        foreach ($points as [$x, $y]) {
+            $dx = $x - $meanX;
+            $covariance += $dx * ($y - $meanY);
+            $variance += $dx * $dx;
+        }
 
         // Every point shares one x: a vertical line, which has no slope to fit.
-        if ($denominator === 0.0) {
+        // The guard still holds after centering — identical x values all centre to
+        // exactly zero, so the variance is exactly zero too.
+        if ($variance === 0.0) {
             return null;
         }
 
-        $slope = (($n * $sumXY) - ($sumX * $sumY)) / $denominator;
-        $intercept = ($sumY - ($slope * $sumX)) / $n;
+        $slope = $covariance / $variance;
 
-        return new self($slope, $intercept, self::rSquared($points, $slope, $intercept, $sumY / $n));
+        // The fit was found around the mean; the intercept is defined at x = 0, so
+        // it is carried back to where the caller expects it.
+        $intercept = $meanY - ($slope * $meanX);
+
+        return new self($slope, $intercept, self::rSquared($points, $slope, $intercept, $meanY));
     }
 
     /**

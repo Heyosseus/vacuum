@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum\Filament\Widgets;
 
 use Filament\Widgets\ChartWidget;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Filament\Models\Table as TableModel;
 use Illuminate\Database\Query\Expression;
 use Override;
@@ -16,6 +17,8 @@ use Override;
  */
 final class LargestTables extends ChartWidget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 4;
 
     protected ?string $heading = 'Largest tables (MB)';

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum\Filament\Widgets;
 
 use Filament\Widgets\ChartWidget;
+use Heyosseus\Vacuum\Filament\Concerns\GatedWidget;
 use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Values\IndexStatistic;
 use Override;
@@ -17,6 +18,8 @@ use Override;
  */
 final class IndexFootprint extends ChartWidget
 {
+    use GatedWidget;
+
     protected static ?int $sort = 5;
 
     protected ?string $heading = 'Index space (MB)';

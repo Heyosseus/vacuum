@@ -23,6 +23,20 @@ final class RejectedStatement extends RuntimeException
         return new self('The console runs one statement at a time.');
     }
 
+    /**
+     * Named plainly, and with the real answer alongside it: the guard is a courtesy,
+     * and the privileges of the connecting role are what actually bound this.
+     */
+    public static function reachesOutside(string $function): self
+    {
+        return new self(
+            "[{$function}] reaches outside the read-only transaction, so the console will not run it. "
+            .'Note that this list is a courtesy and not a boundary: what a console statement can really do '
+            .'is decided by the privileges of the role Vacuum connects as. Point vacuum.connection at a '
+            .'role that may not do this.'
+        );
+    }
+
     public static function analyzeForbidden(): self
     {
         return new self(

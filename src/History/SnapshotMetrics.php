@@ -85,17 +85,22 @@ final readonly class SnapshotMetrics
         $floor = $this->tableFloor();
         $watch = $this->xidWatch();
 
+        // The bloat estimate is the most expensive query a snapshot runs, and both
+        // loops below want the same answer from it, so it is asked once and the
+        // rows are read twice.
+        $estimates = $this->bloat->all();
+
         // Real size per table, from the one query that knows it, so freeze age and
         // dead tuples can be gated on whether the table is large enough to matter.
         $realBytes = [];
 
-        foreach ($this->bloat->all() as $estimate) {
+        foreach ($estimates as $estimate) {
             $realBytes[$estimate->qualifiedName()] = $estimate->realBytes;
         }
 
         $metrics = [];
 
-        foreach ($this->bloat->all() as $estimate) {
+        foreach ($estimates as $estimate) {
             if ($estimate->realBytes >= $floor) {
                 $metrics[] = new CollectedMetric(
                     MetricKind::TableBloatBytes,

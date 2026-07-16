@@ -52,11 +52,23 @@ final readonly class CacheHitRatio implements CacheRule
 
             // Which tables are missing the cache, rather than the average that says
             // only that somebody is.
-            query: "SELECT relname, heap_blks_hit, heap_blks_read,\n"
-                ."       round(100.0 * heap_blks_hit / nullif(heap_blks_hit + heap_blks_read, 0), 1) AS hit_percent\n"
+            //
+            // Index blocks count as well as heap blocks. The ratio above is measured
+            // over every block the database read, so a drill-down that weighed only
+            // heap pages would answer a different question from the one it is under:
+            // on an index-heavy workload the misses are largely index misses, and a
+            // list built on heap_blks_read alone names the wrong tables. The reads
+            // are coalesced because a table with no indexes reports null rather than
+            // zero for them, and null would swallow the whole row.
+            query: "SELECT relname,\n"
+                ."       heap_blks_hit + coalesce(idx_blks_hit, 0) AS blks_hit,\n"
+                ."       heap_blks_read + coalesce(idx_blks_read, 0) AS blks_read,\n"
+                ."       round(100.0 * (heap_blks_hit + coalesce(idx_blks_hit, 0))\n"
+                ."             / nullif(heap_blks_hit + coalesce(idx_blks_hit, 0)\n"
+                ."                      + heap_blks_read + coalesce(idx_blks_read, 0), 0), 1) AS hit_percent\n"
                 ."FROM pg_statio_user_tables\n"
-                ."WHERE heap_blks_read > 0\n"
-                ."ORDER BY heap_blks_read DESC\n"
+                ."WHERE heap_blks_read + coalesce(idx_blks_read, 0) > 0\n"
+                ."ORDER BY heap_blks_read + coalesce(idx_blks_read, 0) DESC\n"
                 .'LIMIT 20;',
         );
     }
