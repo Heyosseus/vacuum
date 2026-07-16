@@ -85,6 +85,33 @@ it('gives the statement resource its label and a single list page', function ():
         ->and(array_keys(StatementResource::getPages()))->toBe(['index']);
 });
 
+/**
+ * The model declares queryid as its primary key, which is only true of an
+ * aggregated read: the raw view keys on (userid, dbid, queryid, toplevel), so the
+ * same statement run by two roles gave Eloquent two records claiming one identity
+ * — and a paged, sorted table built on a non-unique key silently repeats and skips
+ * rows. Grouping in the model's own query is what makes the declared key honest.
+ */
+it('gives every record a queryid that identifies exactly one of them', function (): void {
+    Illuminate\Support\Facades\DB::select('SELECT 1');
+
+    $ids = StatementResource::getEloquentQuery()->pluck('queryid');
+
+    expect($ids)->not->toBeEmpty()
+        ->and($ids->count())->toBe($ids->unique()->count());
+})->skip(fn (): bool => ! statStatementsInstalled(), 'pg_stat_statements is not installed on this server.');
+
+it('counts each statement once, so paging does not repeat or skip rows', function (): void {
+    Illuminate\Support\Facades\DB::select('SELECT 1');
+
+    // The count the paginator uses and the number of distinct statements have to
+    // be the same number, or the last page is a lie.
+    $counted = StatementResource::getEloquentQuery()->count();
+    $distinct = StatementResource::getEloquentQuery()->pluck('queryid')->unique()->count();
+
+    expect($counted)->toBe($distinct);
+})->skip(fn (): bool => ! statStatementsInstalled(), 'pg_stat_statements is not installed on this server.');
+
 it('reads the real statements when the extension is present', function (): void {
     // A query the view will have watched, kept out of the surface's own reading of it.
     Illuminate\Support\Facades\DB::select('SELECT 1');
