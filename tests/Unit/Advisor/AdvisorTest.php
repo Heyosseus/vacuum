@@ -6,6 +6,19 @@ use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\Finding;
 use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Severity;
+use RuntimeException;
+
+/** An inspection the way production breaks one: the query throws, not the rule. */
+final readonly class UnreadableStatisticsInspection implements Inspection
+{
+    /**
+     * @return list<Finding>
+     */
+    public function findings(): array
+    {
+        throw new RuntimeException('permission denied for view pg_stat_activity');
+    }
+}
 
 function finding(string $rule, Severity $severity): Finding
 {
@@ -69,4 +82,27 @@ it('keeps a quiet inspection from hiding a loud one', function (): void {
     $advisor = new Advisor([inspection([]), inspection([finding('urgent', Severity::Critical)])]);
 
     expect(array_column($advisor->findings(), 'rule'))->toBe(['urgent']);
+});
+
+it('keeps one broken inspection from taking every panel down with it', function (): void {
+    $advisor = new Advisor([
+        new UnreadableStatisticsInspection,
+        inspection([finding('urgent', Severity::Critical)]),
+    ]);
+
+    $findings = $advisor->findings();
+
+    // The failure is a finding, sorted like any other, so the inspections that
+    // worked keep their say and the reader is told what went dark and why.
+    expect(array_column($findings, 'rule'))->toBe(['urgent', 'inspection-failed'])
+        ->and($findings[1]->severity)->toBe(Severity::Info)
+        ->and($findings[1]->subject)->toBe('UnreadableStatisticsInspection')
+        ->and($findings[1]->summary)->toContain('no data')
+        ->and($findings[1]->impact)->toBe('permission denied for view pg_stat_activity');
+});
+
+it('reports every broken inspection, not merely the first', function (): void {
+    $advisor = new Advisor([new UnreadableStatisticsInspection, new UnreadableStatisticsInspection]);
+
+    expect(array_column($advisor->findings(), 'rule'))->toBe(['inspection-failed', 'inspection-failed']);
 });
