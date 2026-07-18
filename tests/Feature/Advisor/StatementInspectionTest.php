@@ -114,7 +114,7 @@ function connectionThatRefuses(string $sqlstate): void
             return true;
         }
 
-        public function select($query, $bindings = [], $useReadPdo = true): array
+        public function select($query, $bindings = [], $useReadPdo = true, array $fetchUsing = []): array
         {
             $refused = new PDOException(
                 "SQLSTATE[{$this->sqlstate}]: pg_stat_statements must be loaded via \"shared_preload_libraries\"",
