@@ -58,6 +58,20 @@ jobs:
             filament: '^5.0'
             postgres: '17'
             coverage: true
+          # Laravel 13 legs. pest-plugin-laravel caps at Laravel 12 until its v4,
+          # so supporting 13 requires widening the Pest dev-deps to `|| ^4.0`;
+          # Composer then resolves Pest 4 / PHPUnit 12 on every leg, not just
+          # these. Both Filament majors are proven here as on the other rows.
+          - php: '8.3'
+            laravel: '13.*'
+            testbench: '11.*'
+            filament: '^4.0'
+            postgres: '17'
+          - php: '8.4'
+            laravel: '13.*'
+            testbench: '11.*'
+            filament: '^5.0'
+            postgres: '17'
           # Database-only legs. Lint, Rector, PHPStan and type coverage are all
           # Postgres-version-independent, so they are skipped here rather than run
           # three more times for an identical result; these legs exist to run the

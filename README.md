@@ -41,7 +41,7 @@ PostgreSQL has **two** of those clocks, and either one running out stops the clu
 ## Requirements
 
 - PHP 8.3+
-- Laravel 11 or 12
+- Laravel 11, 12 or 13
 - PostgreSQL 14+
 - Filament 4 or 5 — optional, only if you want the UI inside a panel
 
