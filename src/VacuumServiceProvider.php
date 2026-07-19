@@ -53,6 +53,12 @@ use Heyosseus\Vacuum\Filament\Install\SyntaxChecker;
 use Heyosseus\Vacuum\Filament\Support\HistoryPanel;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
+use Heyosseus\Vacuum\Learn\Curriculum;
+use Heyosseus\Vacuum\Learn\Lesson;
+use Heyosseus\Vacuum\Learn\Lessons\DeadTuples as DeadTuplesLesson;
+use Heyosseus\Vacuum\Learn\Lessons\Fillfactor as FillfactorLesson;
+use Heyosseus\Vacuum\Learn\Lessons\RowVersions as RowVersionsLesson;
+use Heyosseus\Vacuum\Learn\Lessons\UnusedIndexes as UnusedIndexesLesson;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
 use Heyosseus\Vacuum\Queries\IndexDuplicates;
@@ -102,6 +108,9 @@ final class VacuumServiceProvider extends ServiceProvider
 
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
+
+    /** Tag a Lesson with this to have it appear in the Learn curriculum. */
+    public const string LESSONS = 'vacuum.lessons';
 
     /**
      * The inspections registered so far, tagged together once registration ends.
@@ -268,6 +277,19 @@ final class VacuumServiceProvider extends ServiceProvider
 
             return new Advisor($inspections);
         });
+
+        // Registration order is teaching order within a tier: byTier() keeps
+        // lessons in the order they were tagged, so this list is also the
+        // sequence a reader meets them in.
+        $this->app->tag(
+            [RowVersionsLesson::class, FillfactorLesson::class, DeadTuplesLesson::class, UnusedIndexesLesson::class],
+            self::LESSONS,
+        );
+
+        $this->app->bind(
+            Curriculum::class,
+            fn (Application $app): Curriculum => new Curriculum($this->rules($app, self::LESSONS, Lesson::class)),
+        );
     }
 
     /**

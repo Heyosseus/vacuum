@@ -389,6 +389,28 @@
 
         .open:hover { color: var(--amber); border-bottom-color: var(--amber); }
 
+        /* ---- lessons ------------------------------------------------------------
+           Prose in the interface face at reading width. The masthead comment above
+           already reserves that face for where a person wrote a sentence; a lesson is
+           nothing but sentences, and a monospace column of them is a wall. */
+        .lesson { max-width: 68ch; }
+        .lesson p { margin: 0 0 0.75rem; font-size: 0.9375rem; }
+        .lesson p:last-child { margin-bottom: 0; }
+        .lesson code { font: 400 0.8125rem/1 var(--mono); color: var(--amber); }
+        .lesson h3 { margin: 1.25rem 0 0.5rem; font: 400 0.8125rem/1.4 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+
+        /* The decision tree. Box-drawing and borders only -- the .pagebar strip already
+           proves a diagram here needs no assets and no network, and a tool that renders
+           in a terminal face should draw like one. */
+        .tree { margin: 0.75rem 0 0; padding: 0; list-style: none; }
+        .tree__branch { padding: 0.5rem 0 0.5rem 1.25rem; border-left: 2px solid var(--faint); }
+        .tree__branch + .tree__branch { margin-top: 0.5rem; }
+        .tree__branch--taken { border-left-color: var(--amber); }
+        .tree__condition { display: block; font: 500 0.8125rem/1.5 var(--mono); }
+        .tree__outcome { display: block; font-size: 0.875rem; color: var(--muted); }
+        .tree__landed { display: block; margin-top: 0.25rem; font: 400 0.75rem/1.5 var(--mono); color: var(--amber); }
+        .tree__stem { color: var(--faint); }
+
         /* ---- tables ------------------------------------------------------------- */
 
         .scroll { overflow-x: auto; }
@@ -555,9 +577,13 @@
                    @if (request()->routeIs('vacuum.history')) aria-current="page" @endif>history</a>
             @endif
 
-            @if (Route::has('vacuum.internals'))
-                <a href="{{ route('vacuum.internals') }}"
-                   @if (request()->routeIs('vacuum.internals')) aria-current="page" @endif>internals</a>
+            {{-- Learn stands where internals used to. The internals route is still
+                 registered and still linked from the lessons that need it; it is a
+                 page you arrive at having been told what you are looking at, not
+                 one you open cold from a nav bar. --}}
+            @if (Route::has('vacuum.learn'))
+                <a href="{{ route('vacuum.learn') }}"
+                   @if (request()->routeIs('vacuum.learn') || request()->routeIs('vacuum.lesson')) aria-current="page" @endif>learn</a>
             @endif
 
             @if (Route::has('vacuum.console'))
