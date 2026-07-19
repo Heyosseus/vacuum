@@ -8,11 +8,13 @@ use Closure;
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\BloatRule;
 use Heyosseus\Vacuum\Advisor\CacheRule;
+use Heyosseus\Vacuum\Advisor\ConfigurationRule;
 use Heyosseus\Vacuum\Advisor\DuplicateRule;
 use Heyosseus\Vacuum\Advisor\IndexRule;
 use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Inspections\BloatInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\CacheInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\ConfigurationInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\DuplicateInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\IndexInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SessionInspection;
@@ -20,16 +22,23 @@ use Heyosseus\Vacuum\Advisor\Inspections\SettingInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\StatementInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\TableInspection;
 use Heyosseus\Vacuum\Advisor\Rules\AutovacuumDisabled;
+use Heyosseus\Vacuum\Advisor\Rules\AutovacuumWorkersVersusCost;
 use Heyosseus\Vacuum\Advisor\Rules\BlockedSession;
 use Heyosseus\Vacuum\Advisor\Rules\CacheHitRatio;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\Rules\DuplicateIndex;
+use Heyosseus\Vacuum\Advisor\Rules\EndOfLifeMajor;
 use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
 use Heyosseus\Vacuum\Advisor\Rules\InvalidIndex;
+use Heyosseus\Vacuum\Advisor\Rules\IoTimingOff;
+use Heyosseus\Vacuum\Advisor\Rules\LockTimeoutIneffective;
 use Heyosseus\Vacuum\Advisor\Rules\MultixactWraparound;
+use Heyosseus\Vacuum\Advisor\Rules\PendingRestart;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
 use Heyosseus\Vacuum\Advisor\Rules\StaleStatistics;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
+use Heyosseus\Vacuum\Advisor\Rules\TimeoutsUnset;
+use Heyosseus\Vacuum\Advisor\Rules\UnpatchedServer;
 use Heyosseus\Vacuum\Advisor\Rules\UnusedIndex;
 use Heyosseus\Vacuum\Advisor\Rules\Wraparound;
 use Heyosseus\Vacuum\Advisor\SessionRule;
@@ -49,6 +58,7 @@ use Heyosseus\Vacuum\Queries\CacheStatistics;
 use Heyosseus\Vacuum\Queries\IndexDuplicates;
 use Heyosseus\Vacuum\Queries\IndexStatistics;
 use Heyosseus\Vacuum\Queries\ServerCapabilities;
+use Heyosseus\Vacuum\Queries\ServerSettings;
 use Heyosseus\Vacuum\Queries\Sessions;
 use Heyosseus\Vacuum\Queries\Statements;
 use Heyosseus\Vacuum\Queries\TableStatistics;
@@ -86,6 +96,9 @@ final class VacuumServiceProvider extends ServiceProvider
 
     /** The same, for a rule that judges how the server itself is configured. */
     public const string SETTING_RULES = 'vacuum.setting-rules';
+
+    /** The same, for a rule that judges the full pg_settings audit -- context, source, pending_restart. */
+    public const string CONFIGURATION_RULES = 'vacuum.configuration-rules';
 
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
@@ -218,9 +231,26 @@ final class VacuumServiceProvider extends ServiceProvider
             SettingInspection::class,
             self::SETTING_RULES,
             SettingRule::class,
-            [AutovacuumDisabled::class],
+            [AutovacuumDisabled::class, UnpatchedServer::class, EndOfLifeMajor::class],
             fn (Application $app, array $rules): Inspection => new SettingInspection(
                 $app->make(Capabilities::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
+            ConfigurationInspection::class,
+            self::CONFIGURATION_RULES,
+            ConfigurationRule::class,
+            [
+                PendingRestart::class,
+                TimeoutsUnset::class,
+                LockTimeoutIneffective::class,
+                IoTimingOff::class,
+                AutovacuumWorkersVersusCost::class,
+            ],
+            fn (Application $app, array $rules): Inspection => new ConfigurationInspection(
+                $app->make(ServerSettings::class),
                 $rules,
             ),
         );

@@ -7,7 +7,9 @@ use Heyosseus\Vacuum\Tests\DisabledTestCase;
 use Heyosseus\Vacuum\Tests\FilamentTestCase;
 use Heyosseus\Vacuum\Tests\FilamentUiTestCase;
 use Heyosseus\Vacuum\Tests\HistoryTestCase;
+use Heyosseus\Vacuum\Tests\InternalsTestCase;
 use Heyosseus\Vacuum\Tests\TestCase;
+use Heyosseus\Vacuum\Values\Setting;
 
 uses(TestCase::class)->in('Feature', 'Unit');
 
@@ -26,6 +28,12 @@ uses(HistoryTestCase::class)->in('History');
 uses(DisabledTestCase::class)->in('Disabled');
 uses(ConsoleTestCase::class)->in('Console');
 uses(FilamentUiTestCase::class)->in('FilamentUi');
+
+/*
+ * Same reasoning as the master switch above, scoped to the one page that needs
+ * the internals explorers routable rather than merely constructible.
+ */
+uses(InternalsTestCase::class)->in('Internals');
 
 /*
  * The smoke tests boot a real Filament panel with Vacuum's plugin on it, so they
@@ -84,6 +92,30 @@ function exerciseColumn(Filament\Tables\Columns\Column $column): void
     $column->getDescriptionAbove();
     $column->getDescriptionBelow();
     $column->getTooltip($state);
+}
+
+/**
+ * A pg_settings row built for a test, without the ceremony of naming every column
+ * a rule does not care about. Shared by every configuration-rule test rather than
+ * declared once per file, since a global function can only be declared once.
+ */
+function setting(
+    string $name,
+    string $value,
+    string $context = 'user',
+    string $source = 'default',
+    string $bootValue = '',
+    bool $pendingRestart = false,
+): Setting {
+    return new Setting(
+        name: $name,
+        value: $value,
+        unit: null,
+        context: $context,
+        source: $source,
+        bootValue: $bootValue === '' ? $value : $bootValue,
+        pendingRestart: $pendingRestart,
+    );
 }
 
 /** Whether the server under test has pg_stat_statements, which its analytics need. */

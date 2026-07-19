@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Heyosseus\Vacuum\Advisor\Inspections\ConfigurationInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SettingInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\TableInspection;
 use Heyosseus\Vacuum\VacuumServiceProvider;
@@ -27,7 +28,8 @@ it('resolves every tagged inspection through the registration helper', function 
         $inspections[] = $inspection::class;
     }
 
-    expect($inspections)->toHaveCount(8)
+    expect($inspections)->toHaveCount(9)
         ->and($inspections)->toContain(TableInspection::class)
-        ->and($inspections)->toContain(SettingInspection::class);
+        ->and($inspections)->toContain(SettingInspection::class)
+        ->and($inspections)->toContain(ConfigurationInspection::class);
 });

@@ -58,13 +58,17 @@ it('shows what the advisor found on the database it is pointed at', function ():
     DB::statement('DROP TABLE IF EXISTS gadgets');
 });
 
-it('says so plainly when it has nothing to complain about', function (): void {
+it('says so plainly when no table, index or session has anything wrong with it', function (): void {
+    // The configuration and patch-posture rules judge the server itself rather
+    // than any table, so they still have an opinion here -- this test database
+    // is not running the latest minor -- and the findings panel is expected to
+    // carry that one entry rather than sit empty.
     Vacuum::auth(static fn (Request $request): bool => true);
 
     $this->get('/vacuum')
-        ->assertSee('Nothing to report')
+        ->assertDontSee('Nothing to report')
         ->assertSee('Grade A')
-        ->assertSee('Nothing has been deducted');
+        ->assertSee('unpatched-server');
 });
 
 it('cannot award a grade its own findings disagree with', function (): void {
