@@ -261,4 +261,27 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Internals Explorers
+    |--------------------------------------------------------------------------
+    |
+    | The internals explorers read raw pages and tuple headers out of your
+    | tables. Everything they do is a SELECT -- there is no write path here
+    | any more than anywhere else in the package -- but they are off until
+    | you say otherwise, because the deep ones need contrib extensions and
+    | privileges most production roles should not be carrying.
+    |
+    */
+
+    'internals' => [
+        'enabled' => env('VACUUM_INTERNALS_ENABLED', false),
+
+        // Finding a page worth looking at means reading pages until one turns
+        // up. On a large table the first hundred are all ordinary live tuples,
+        // so the search is bounded and says how far it looked rather than
+        // implying a table is clean because it stopped early.
+        'page_sample_limit' => env('VACUUM_INTERNALS_PAGE_SAMPLE_LIMIT', 100),
+    ],
+
 ];
