@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Heyosseus\Vacuum\Advisor\Inspections\SessionInspection;
+use Heyosseus\Vacuum\Advisor\Severity;
+use Heyosseus\Vacuum\Queries\Sessions;
 use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Support\Facades\DB;
 
@@ -48,4 +50,22 @@ it('keeps quiet about visibility when it can see everything', function (): void 
 
     expect(array_column(app(SessionInspection::class)->findings(), 'rule'))
         ->not->toContain('partial-visibility');
+});
+
+it('reports partial sight as unknown rather than as merely informational', function (): void {
+    // Info means "a fact worth knowing". This is not that: it is the dashboard
+    // admitting the list below it may be missing the very row that matters.
+    $findings = (new SessionInspection(
+        new Capabilities(
+            serverVersion: 170005,
+            extensions: [],
+            settings: [],
+            readsAllStatistics: false,
+        ),
+        app(Sessions::class),
+        [],
+    ))->findings();
+
+    expect($findings[0]->rule)->toBe('partial-visibility')
+        ->and($findings[0]->severity)->toBe(Severity::Unknown);
 });

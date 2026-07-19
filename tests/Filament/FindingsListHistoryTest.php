@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use Carbon\CarbonImmutable;
+use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\Finding;
+use Heyosseus\Vacuum\Advisor\Inspection;
 use Heyosseus\Vacuum\Advisor\Severity;
 use Heyosseus\Vacuum\Filament\Widgets\FindingsList;
 use Heyosseus\Vacuum\History\FindingView;
@@ -46,4 +48,33 @@ it('phrases a forecast, and shows nothing when there is none', function (): void
 
 it('hands the list its finding views', function (): void {
     expect(app(FindingsList::class)->findingViews())->toBeArray();
+});
+
+it('gives an unknown finding its own triage band, sorted last', function (): void {
+    $finding = new Finding(
+        rule: 'partial-visibility',
+        subject: 'public.orders',
+        severity: Severity::Unknown,
+        summary: 's',
+        impact: 'i',
+        table: 'public.orders',
+    );
+
+    $inspection = new readonly class($finding) implements Inspection
+    {
+        public function __construct(private Finding $finding) {}
+
+        public function findings(): array
+        {
+            return [$this->finding];
+        }
+    };
+
+    app()->instance(Advisor::class, new Advisor([$inspection]));
+
+    $bands = app(FindingsList::class)->triage();
+    $last = $bands[array_key_last($bands)];
+
+    expect($last['severity'])->toBe(Severity::Unknown)
+        ->and($last['count'])->toBe(1);
 });

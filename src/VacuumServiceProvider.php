@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Heyosseus\Vacuum;
 
+use Closure;
 use Heyosseus\Vacuum\Advisor\Advisor;
 use Heyosseus\Vacuum\Advisor\BloatRule;
 use Heyosseus\Vacuum\Advisor\CacheRule;
@@ -90,6 +91,18 @@ final class VacuumServiceProvider extends ServiceProvider
     public const string INSPECTIONS = 'vacuum.inspections';
 
     /**
+     * The inspections registered so far, tagged together once registration ends.
+     *
+     * Accumulating them means an inspection is declared in exactly one place
+     * rather than in a bind, a tag, and a list -- three edits that a new
+     * inspection previously had to remember, and that a forgotten third made
+     * silently invisible.
+     *
+     * @var list<class-string<Inspection>>
+     */
+    private array $inspections = [];
+
+    /**
      * Register the package's services into the container.
      */
     #[Override]
@@ -121,73 +134,98 @@ final class VacuumServiceProvider extends ServiceProvider
         // Overview's widgets share one run of the advisor.
         $this->app->scoped(HistoryPanel::class);
 
-        $this->app->tag([
-            DeadTuples::class,
-            StaleStatistics::class,
-            Wraparound::class,
-            MultixactWraparound::class,
-        ], self::TABLE_RULES);
-        $this->app->tag([TableBloat::class], self::BLOAT_RULES);
-        $this->app->tag([UnusedIndex::class, InvalidIndex::class], self::INDEX_RULES);
-        $this->app->tag([DuplicateIndex::class], self::DUPLICATE_RULES);
-        $this->app->tag([CacheHitRatio::class], self::CACHE_RULES);
-        $this->app->tag([IdleInTransaction::class, BlockedSession::class], self::SESSION_RULES);
-        $this->app->tag([SlowStatement::class], self::STATEMENT_RULES);
-        $this->app->tag([AutovacuumDisabled::class], self::SETTING_RULES);
-
-        $this->app->bind(TableInspection::class, fn (Application $app): TableInspection => new TableInspection(
-            $app->make(TableStatistics::class),
-            $this->rules($app, self::TABLE_RULES, TableRule::class),
-        ));
-
-        $this->app->bind(BloatInspection::class, fn (Application $app): BloatInspection => new BloatInspection(
-            $app->make(BloatEstimates::class),
-            $this->rules($app, self::BLOAT_RULES, BloatRule::class),
-        ));
-
-        $this->app->bind(IndexInspection::class, fn (Application $app): IndexInspection => new IndexInspection(
-            $app->make(IndexStatistics::class),
-            $this->rules($app, self::INDEX_RULES, IndexRule::class),
-        ));
-
-        $this->app->bind(DuplicateInspection::class, fn (Application $app): DuplicateInspection => new DuplicateInspection(
-            $app->make(IndexDuplicates::class),
-            $this->rules($app, self::DUPLICATE_RULES, DuplicateRule::class),
-        ));
-
-        $this->app->bind(CacheInspection::class, fn (Application $app): CacheInspection => new CacheInspection(
-            $app->make(Capabilities::class),
-            $app->make(CacheStatistics::class),
-            $this->rules($app, self::CACHE_RULES, CacheRule::class),
-        ));
-
-        $this->app->bind(SessionInspection::class, fn (Application $app): SessionInspection => new SessionInspection(
-            $app->make(Capabilities::class),
-            $app->make(Sessions::class),
-            $this->rules($app, self::SESSION_RULES, SessionRule::class),
-        ));
-
-        $this->app->bind(StatementInspection::class, fn (Application $app): StatementInspection => new StatementInspection(
-            $app->make(Capabilities::class),
-            $app->make(Statements::class),
-            $this->rules($app, self::STATEMENT_RULES, StatementRule::class),
-        ));
-
-        $this->app->bind(SettingInspection::class, fn (Application $app): SettingInspection => new SettingInspection(
-            $app->make(Capabilities::class),
-            $this->rules($app, self::SETTING_RULES, SettingRule::class),
-        ));
-
-        $this->app->tag([
+        $this->registerInspection(
             TableInspection::class,
+            self::TABLE_RULES,
+            TableRule::class,
+            [DeadTuples::class, StaleStatistics::class, Wraparound::class, MultixactWraparound::class],
+            fn (Application $app, array $rules): Inspection => new TableInspection(
+                $app->make(TableStatistics::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             BloatInspection::class,
+            self::BLOAT_RULES,
+            BloatRule::class,
+            [TableBloat::class],
+            fn (Application $app, array $rules): Inspection => new BloatInspection(
+                $app->make(BloatEstimates::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             IndexInspection::class,
+            self::INDEX_RULES,
+            IndexRule::class,
+            [UnusedIndex::class, InvalidIndex::class],
+            fn (Application $app, array $rules): Inspection => new IndexInspection(
+                $app->make(IndexStatistics::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             DuplicateInspection::class,
+            self::DUPLICATE_RULES,
+            DuplicateRule::class,
+            [DuplicateIndex::class],
+            fn (Application $app, array $rules): Inspection => new DuplicateInspection(
+                $app->make(IndexDuplicates::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             CacheInspection::class,
+            self::CACHE_RULES,
+            CacheRule::class,
+            [CacheHitRatio::class],
+            fn (Application $app, array $rules): Inspection => new CacheInspection(
+                $app->make(Capabilities::class),
+                $app->make(CacheStatistics::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             SessionInspection::class,
+            self::SESSION_RULES,
+            SessionRule::class,
+            [IdleInTransaction::class, BlockedSession::class],
+            fn (Application $app, array $rules): Inspection => new SessionInspection(
+                $app->make(Capabilities::class),
+                $app->make(Sessions::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             StatementInspection::class,
+            self::STATEMENT_RULES,
+            StatementRule::class,
+            [SlowStatement::class],
+            fn (Application $app, array $rules): Inspection => new StatementInspection(
+                $app->make(Capabilities::class),
+                $app->make(Statements::class),
+                $rules,
+            ),
+        );
+
+        $this->registerInspection(
             SettingInspection::class,
-        ], self::INSPECTIONS);
+            self::SETTING_RULES,
+            SettingRule::class,
+            [AutovacuumDisabled::class],
+            fn (Application $app, array $rules): Inspection => new SettingInspection(
+                $app->make(Capabilities::class),
+                $rules,
+            ),
+        );
+
+        $this->app->tag($this->inspections, self::INSPECTIONS);
 
         $this->app->bind(Advisor::class, function (Application $app): Advisor {
             $inspections = [];
@@ -200,6 +238,33 @@ final class VacuumServiceProvider extends ServiceProvider
 
             return new Advisor($inspections);
         });
+    }
+
+    /**
+     * Register one inspection: its rules, its binding, and its place in the tag.
+     *
+     * @template TRule of object
+     *
+     * @param  class-string<Inspection>  $inspection
+     * @param  class-string<TRule>  $contract
+     * @param  list<class-string<TRule>>  $rules
+     * @param  Closure(Application, list<TRule>): Inspection  $make
+     */
+    private function registerInspection(
+        string $inspection,
+        string $tag,
+        string $contract,
+        array $rules,
+        Closure $make,
+    ): void {
+        $this->app->tag($rules, $tag);
+
+        $this->app->bind(
+            $inspection,
+            fn (Application $app): Inspection => $make($app, $this->rules($app, $tag, $contract)),
+        );
+
+        $this->inspections[] = $inspection;
     }
 
     /**

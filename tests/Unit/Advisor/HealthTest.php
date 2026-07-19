@@ -148,3 +148,22 @@ it('grades the score the way a school would', function (): void {
         ->and(Grade::for(59))->toBe(Grade::F)
         ->and(Grade::for(0))->toBe(Grade::F);
 });
+
+it('does not deduct for a check that could not run', function (): void {
+    expect(Health::from([complaint('partial-visibility', Severity::Unknown)])->score)->toBe(100);
+});
+
+it('counts the checks that could not run so the grade can say so', function (): void {
+    $health = Health::from([
+        complaint('partial-visibility', Severity::Unknown),
+        complaint('slot-retention', Severity::Unknown, 'replication'),
+        complaint('dead-tuples', Severity::Warning),
+    ]);
+
+    expect($health->unknowns)->toBe(2)
+        ->and($health->score)->toBe(95);
+});
+
+it('reports no unknowns when everything could be checked', function (): void {
+    expect(Health::from([complaint('dead-tuples', Severity::Warning)])->unknowns)->toBe(0);
+});

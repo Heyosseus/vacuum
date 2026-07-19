@@ -27,3 +27,21 @@ it('refuses a name that could climb out of the statement directory', function ()
 it('says which statement it could not find', function (): void {
     app(SqlRepository::class)->get('no_such_statement');
 })->throws(MissingStatement::class, 'no_such_statement');
+
+it('prefers a statement written for the server major version', function (): void {
+    $repository = new SqlRepository(__DIR__.'/../../fixtures/sql');
+
+    expect($repository->get('checkpoints', 17))->toContain('pg_stat_checkpointer');
+});
+
+it('falls back to the version-neutral statement when no variant exists', function (): void {
+    $repository = new SqlRepository(__DIR__.'/../../fixtures/sql');
+
+    expect($repository->get('checkpoints', 16))->toContain('pg_stat_bgwriter');
+});
+
+it('reads the version-neutral statement when no version is given', function (): void {
+    $repository = new SqlRepository(__DIR__.'/../../fixtures/sql');
+
+    expect($repository->get('checkpoints'))->toContain('pg_stat_bgwriter');
+});

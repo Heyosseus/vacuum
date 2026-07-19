@@ -94,11 +94,20 @@ final class FindingsList extends Widget
      * How many findings sit at each severity, for the triage line above the list. The
      * order is the order they are read: worst first.
      *
+     * The bands are derived from `Severity::cases()` rather than a literal list, so a
+     * severity added later -- as `Unknown` was -- takes its place by rank without this
+     * method needing to be remembered and edited to match. Sorting by `rank()` is what
+     * keeps that order worst-first even though the enum does not declare its cases
+     * that way.
+     *
      * @return array<int, array{severity: Severity, label: string, count: int, rail: string}>
      */
     public function triage(): array
     {
         $findings = $this->findings();
+
+        $severities = Severity::cases();
+        usort($severities, static fn (Severity $a, Severity $b): int => $a->rank() <=> $b->rank());
 
         return array_values(array_filter(
             array_map(
@@ -108,7 +117,7 @@ final class FindingsList extends Widget
                     'count' => count(array_filter($findings, static fn (Finding $finding): bool => $finding->severity === $severity)),
                     'rail' => $this->railFor($severity),
                 ],
-                [Severity::Critical, Severity::Warning, Severity::Info],
+                $severities,
             ),
             static fn (array $band): bool => $band['count'] > 0,
         ));
@@ -127,6 +136,7 @@ final class FindingsList extends Widget
             Severity::Critical => 'Critical',
             Severity::Warning => 'Warning',
             Severity::Info => 'Info',
+            Severity::Unknown => 'Unknown',
         };
     }
 
@@ -146,7 +156,7 @@ final class FindingsList extends Widget
         return match ($severity) {
             Severity::Critical => '#e11d48',
             Severity::Warning => '#f59e0b',
-            Severity::Info => '#94a3b8',
+            Severity::Info, Severity::Unknown => '#94a3b8',
         };
     }
 }

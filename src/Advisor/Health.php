@@ -33,12 +33,18 @@ final readonly class Health
      * @param  bool  $capped  Whether the letter is lower than the score alone would
      *                        have given, so the page can say so rather than leave a
      *                        reader to wonder why 85 is a D.
+     * @param  int  $unknowns  How many checks could not run at all. These cost the
+     *                         score nothing -- an unknown is not a fault -- but a
+     *                         grade worked out from half the evidence should say
+     *                         which half, so the page can print "of what I could
+     *                         see" rather than let a reader assume it saw all of it.
      */
     private function __construct(
         public int $score,
         public Grade $grade,
         public array $deductions,
         public bool $capped,
+        public int $unknowns,
     ) {}
 
     /**
@@ -50,6 +56,14 @@ final readonly class Health
 
         foreach ($findings as $finding) {
             $costs[$finding->rule] = ($costs[$finding->rule] ?? 0) + $finding->severity->weight();
+        }
+
+        $unknowns = 0;
+
+        foreach ($findings as $finding) {
+            if ($finding->severity === Severity::Unknown) {
+                $unknowns++;
+            }
         }
 
         $deductions = [];
@@ -69,7 +83,13 @@ final readonly class Health
         $score = max(0, 100 - array_sum($deductions));
         $grade = self::grade($score, $findings);
 
-        return new self($score, $grade, $deductions, capped: $grade !== Grade::for($score));
+        return new self(
+            $score,
+            $grade,
+            $deductions,
+            capped: $grade !== Grade::for($score),
+            unknowns: $unknowns,
+        );
     }
 
     /**

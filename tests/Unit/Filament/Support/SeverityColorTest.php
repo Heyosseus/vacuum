@@ -16,3 +16,7 @@ it('paints a warning finding in Filament warning amber', function (): void {
 it('paints an info finding a neutral gray, because it is a fact and not a fault', function (): void {
     expect(SeverityColor::for(Severity::Info))->toBe('gray');
 });
+
+it('paints an unknown neutrally rather than as an alarm', function (): void {
+    expect(SeverityColor::for(Severity::Unknown))->toBe('gray');
+});
