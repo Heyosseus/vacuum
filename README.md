@@ -12,7 +12,7 @@ It shows you that statement. It never runs it.
 
 ![Vacuum's standalone dashboard: the health grade and the findings that produced it](art/blade-overview.png)
 
-> **Status: 0.3.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
+> **Status: 0.6.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
 
 ## What it tells you
 
@@ -37,6 +37,39 @@ Every finding carries a severity, what the problem costs you, and — where a si
 Most of those rules describe a database that is slower than it could be. `wraparound` describes one that **stops**: PostgreSQL counts transactions in 32 bits, and a table nothing freezes drags the whole cluster toward the end of that count, at which point the server refuses every write until it is shut down and vacuumed in single-user mode. It gives no warning of its own, and it does not slow down first.
 
 PostgreSQL has **two** of those clocks, and either one running out stops the cluster. The second counts *multixacts* — the objects it allocates when more than one transaction holds a lock on the same row at once, which is ordinary on a table with foreign keys pointing at it or one read with `SELECT ... FOR UPDATE`. It has its own horizon (`autovacuum_multixact_freeze_max_age`, 400 million by default, twice the transaction one) and autovacuum advances it separately. A table under a lock-heavy workload can therefore be perfectly healthy on `wraparound` and be the table that stops your database. `multixact-wraparound` watches that clock. The remedy is the same `VACUUM (FREEZE, ANALYZE)` — only the seeing had to be added.
+
+## Learn
+
+The advisor tells you what is wrong. **Learn**, at `/learn`, tells you why — using your own tables as the worked example.
+
+Every explainer on the internet already exists. None of them can say *"this is happening in your `orders` table right now"*, and that sentence is the entire point: a lesson that names no table of yours is a blog post and belongs somewhere else.
+
+Thirteen lessons across five tiers. Each renders in four bands — what is going on, what is going on **here**, what to do about it, and a statement to go and run. Band three is a **decision tree**: a lesson that says "it depends" and stops has failed you, so this is what it depends on, with your own tables sorted onto the branch they landed on.
+
+The fillfactor lesson is the sharp example. A poor HOT-update share has two unrelated causes with two unrelated remedies, and they are indistinguishable in the ratio alone — a page with no room left, or an indexed column changing. The tree separates them, so a table whose real problem is an index on `updated_at` is not told to lower its fillfactor, which would not move it an inch.
+
+| Tier | Lessons |
+| --- | --- |
+| Eloquent & Laravel | `unindexed-foreign-keys`, `n-plus-one`, `soft-deletes`, `framework-tables`, `timestamps-and-hot`, `chunking-large-tables`, `json-columns`, `transactions-and-locks` |
+| Storage & MVCC | `row-versions`, `fillfactor` |
+| Indexes | `unused-indexes` |
+| Maintenance | `dead-tuples` |
+| Advanced | `heap-page` |
+
+The Eloquent tier sorts first because it is the on-ramp: you arrive fluent in `$model->update()` and have never heard of a heap, so the first thing you meet is your own ORM, and each lesson there points down into the PostgreSQL material underneath it.
+
+Two of them earn their place immediately. **`unindexed-foreign-keys`** — PostgreSQL indexes a primary key and a unique constraint and creates *nothing* for a foreign key, where MySQL does. So `$table->foreignId('customer_id')->constrained()` leaves every `$customer->delete()` sequentially scanning the child table while holding a lock, and the cost never shows up where you look for it. **`n-plus-one`** is written from the database's side, which nothing else does: the database never sees your loop, it sees one statement executed a hundred thousand times, each one fast. Its signature is an enormous call count with a trivial mean time — which is exactly why every dashboard that ranks by slowest query is structurally blind to it.
+
+Laravel is recognised **in the schema, by convention**: `deleted_at` is what `SoftDeletes` adds, `jobs` and `sessions` are what `artisan` generated, a `jsonb` column is what a cast maps onto. Vacuum never loads your application's classes to find out — a monitoring package that boots the app it monitors can be brought down by a model that throws in its constructor. The lessons say so rather than claiming to have read your model: the catalog can prove a column exists, and cannot prove which trait put it there.
+
+Learn reads the catalog and the statistics views only, needs no extension and no superuser, and is **on by default**. Nothing in it writes — band four hands you a statement, exactly as the dashboard does, and never runs one.
+
+```php
+// config/vacuum.php
+'learn' => [
+    'enabled' => env('VACUUM_LEARN_ENABLED', true),
+],
+```
 
 ## Requirements
 
