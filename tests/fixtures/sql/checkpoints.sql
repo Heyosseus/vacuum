@@ -1,0 +1,1 @@
+SELECT checkpoints_timed, checkpoints_req FROM pg_stat_bgwriter

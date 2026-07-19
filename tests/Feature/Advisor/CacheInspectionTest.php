@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Heyosseus\Vacuum\Advisor\Inspections\CacheInspection;
+use Heyosseus\Vacuum\Advisor\Severity;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
 use Heyosseus\Vacuum\Values\Capabilities;
 
@@ -37,4 +38,21 @@ it('explains itself when postgres is not counting rather than reporting a perfec
 
     expect(array_column($findings, 'rule'))->toBe(['statistics-disabled'])
         ->and($findings[0]->remediation)->toBe('ALTER SYSTEM SET track_counts = on;');
+});
+
+it('reports an unmeasurable cache as unknown rather than as merely informational', function (): void {
+    $findings = (new CacheInspection(
+        new Capabilities(
+            serverVersion: 170005,
+            extensions: [],
+            settings: ['track_counts' => 'off'],
+            readsAllStatistics: true,
+        ),
+        app(CacheStatistics::class),
+        [],
+    ))->findings();
+
+    expect($findings)->toHaveCount(1)
+        ->and($findings[0]->rule)->toBe('statistics-disabled')
+        ->and($findings[0]->severity)->toBe(Severity::Unknown);
 });

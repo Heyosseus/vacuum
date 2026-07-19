@@ -81,7 +81,7 @@ final readonly class StatementInspection implements Inspection
         return new Finding(
             rule: 'extension-missing',
             subject: 'database',
-            severity: Severity::Info,
+            severity: Severity::Unknown,
             summary: 'pg_stat_statements is not active, so nothing is keeping track of what your queries cost.',
             impact: 'It is the only way PostgreSQL will tell you which queries are slow, and it is not on by '
                 .'default. Creating the extension is not enough on its own: the library has to be listed in '

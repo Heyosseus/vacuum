@@ -59,7 +59,7 @@ final readonly class CacheInspection implements Inspection
         return new Finding(
             rule: 'statistics-disabled',
             subject: 'database',
-            severity: Severity::Info,
+            severity: Severity::Unknown,
             summary: 'PostgreSQL is not counting block reads, so the cache hit ratio cannot be measured.',
             impact: 'With track_counts off, the statistics collector records nothing, and every counter this '
                 .'dashboard reads is a zero rather than a measurement. Autovacuum also relies on these '

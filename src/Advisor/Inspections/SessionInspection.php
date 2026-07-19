@@ -59,7 +59,7 @@ final readonly class SessionInspection implements Inspection
         return new Finding(
             rule: 'partial-visibility',
             subject: 'database',
-            severity: Severity::Info,
+            severity: Severity::Unknown,
             summary: 'This role can only see its own sessions, so anything below is part of the picture.',
             impact: 'PostgreSQL hides the query text and state of other roles\' sessions from a role without '
                 .'pg_read_all_stats. The transaction blocking your database may be sitting in this view as a '

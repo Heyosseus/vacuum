@@ -138,3 +138,10 @@ it('prints the score a person would have seen on the dashboard', function (): vo
         ->and($output)->toContain('Grade A')
         ->and($output)->toContain('dead-tuples');
 });
+
+it('never fails a build for a check it could not run', function (): void {
+    // A red build should mean "your database has a problem", never "your
+    // monitoring role is short a grant". Conflating the two teaches a team to
+    // pass --fail-on=never, and then the gate protects nothing at all.
+    expect(Severity::Unknown->rank())->toBeGreaterThan(Severity::Info->rank());
+});

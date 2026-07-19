@@ -408,6 +408,30 @@
         tbody tr:hover { background: var(--raised); }
         .note { color: var(--faint); }
 
+        /* ---- page bar: the one visual this whole pillar exists for -------------
+           A page is 8 kB. The pointer array grows down from `lower`, tuples grow up
+           from `upper`, and the gap between them is free -- fillfactor's entire
+           argument in one proportional strip. */
+        .pagebar { display: flex; height: 0.875rem; overflow: hidden; border: 1px solid var(--line); }
+        .pagebar__seg { display: block; height: 100%; }
+        .pagebar__seg--pointers { background: var(--cyan); }
+        .pagebar__seg--free { background: var(--empty); }
+        .pagebar__seg--tuples { background: var(--amber); }
+
+        /* ---- line pointers: colour carries the meaning ---------------------------
+           A dead tuple is red because it is the thing this page exists to make
+           visible. A redirect is a HOT chain's root; a heap-only tuple is reachable
+           only through that chain, so it reads the same amber, dimmer. */
+        .lp--dead { color: var(--red); }
+        .lp--redirect { color: var(--amber); }
+        .lp--heaponly { color: var(--amber); opacity: 0.72; }
+        .lp__xmax--superseded { color: var(--red); }
+
+        /* ---- HOT chains: drawn as a chain, not summarised ------------------------ */
+        .chain { margin: 0 0 0.375rem; font: 400 0.8125rem/1.6 var(--mono); }
+        .chain__lp { color: var(--amber); }
+        .chain__arrow { color: var(--muted); }
+
         /* ---- console -------------------------------------------------------------- */
 
         .console textarea {
@@ -476,6 +500,29 @@
         .status b { color: var(--bg); background: var(--amber); padding: 0 0.25rem; font-weight: 400; }
         .status .said { margin-left: auto; color: var(--green); }
 
+        /* The block navigator on the internals page prints its own keys and a jump
+           box into this same bar, rather than inventing a second footer. */
+        .status a { color: var(--muted); text-decoration: none; }
+        .status a:hover { color: var(--ink); }
+        .status form { display: flex; align-items: center; gap: 0.375rem; margin-left: auto; }
+        .status input[type="number"] {
+            width: 4.5rem;
+            padding: 0.125rem 0.25rem;
+            font: inherit;
+            color: var(--ink);
+            background: var(--bg);
+            border: 1px solid var(--line);
+        }
+        .status button {
+            padding: 0.125rem 0.4375rem;
+            font: inherit;
+            color: var(--muted);
+            background: transparent;
+            border: 1px solid var(--line);
+            cursor: pointer;
+        }
+        .status button:hover { color: var(--ink); }
+
         [hidden] { display: none !important; }
 
         @media (prefers-reduced-motion: reduce) {
@@ -506,6 +553,11 @@
             @if (Route::has('vacuum.history'))
                 <a href="{{ route('vacuum.history') }}"
                    @if (request()->routeIs('vacuum.history')) aria-current="page" @endif>history</a>
+            @endif
+
+            @if (Route::has('vacuum.internals'))
+                <a href="{{ route('vacuum.internals') }}"
+                   @if (request()->routeIs('vacuum.internals')) aria-current="page" @endif>internals</a>
             @endif
 
             @if (Route::has('vacuum.console'))

@@ -155,7 +155,11 @@ final class CheckCommand extends Command
         $limit = Severity::from($bar);
 
         foreach ($findings as $finding) {
-            if ($finding->severity->rank() <= $limit->rank()) {
+            // An unknown is excluded from the gate by rank today, but only by
+            // accident of its number. Said out loud, it survives somebody
+            // reordering the ranks: a build should go red because the database
+            // has a problem, never because the role was short a grant.
+            if ($finding->severity !== Severity::Unknown && $finding->severity->rank() <= $limit->rank()) {
                 return true;
             }
         }
@@ -173,7 +177,7 @@ final class CheckCommand extends Command
         return match ($severity) {
             Severity::Critical => 'red',
             Severity::Warning => 'yellow',
-            Severity::Info => 'blue',
+            Severity::Info, Severity::Unknown => 'blue',
         };
     }
 }

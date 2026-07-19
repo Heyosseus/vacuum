@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Heyosseus\Vacuum\Advisor\Inspections\StatementInspection;
+use Heyosseus\Vacuum\Advisor\Severity;
+use Heyosseus\Vacuum\Queries\Statements;
 use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
@@ -77,6 +79,23 @@ it('does not swallow a failure that is not about preloading', function (): void 
 
     app(StatementInspection::class)->findings();
 })->throws(QueryException::class);
+
+it('reports untracked statements as unknown rather than as merely informational', function (): void {
+    $findings = (new StatementInspection(
+        new Capabilities(
+            serverVersion: 170005,
+            extensions: [],
+            settings: [],
+            readsAllStatistics: true,
+        ),
+        app(Statements::class),
+        [],
+    ))->findings();
+
+    expect($findings)->toHaveCount(1)
+        ->and($findings[0]->rule)->toBe('extension-missing')
+        ->and($findings[0]->severity)->toBe(Severity::Unknown);
+});
 
 function extensionInstalled(): bool
 {
