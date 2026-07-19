@@ -24,6 +24,11 @@ final readonly class TableProfile
      *                                    set one, otherwise the server's.
      * @param  bool  $tuned  Whether this table overrides any of the server's autovacuum
      *                       settings for itself.
+     * @param  ?int  $fillfactor  The reloption a table set for itself, or null when it never
+     *                            set one. PostgreSQL leaves the reloption unset when it is
+     *                            100 — null means "the default, which is completely full" —
+     *                            and that is exactly what leaves an update nowhere to go but
+     *                            a new page.
      */
     public function __construct(
         public string $schema,
@@ -54,6 +59,7 @@ final readonly class TableProfile
         public float $analyzeScaleFactor,
         public int $analyzeThreshold,
         public bool $tuned,
+        public ?int $fillfactor = null,
     ) {}
 
     public function qualifiedName(): string

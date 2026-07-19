@@ -45,14 +45,52 @@ final readonly class Statements
      */
     public function slowest(): array
     {
-        // The NOT LIKE keeps Vacuum's own reading of the statistics out of the
-        // statistics. A dashboard reporting the cost of watching the dashboard is
-        // a dashboard nobody trusts twice.
-        //
-        // A null queryid is dropped rather than grouped: the server could not
-        // identify those statements, so they are not one shape, and collapsing
-        // them together would invent a query that nobody ran.
-        $sql = <<<'SQL'
+        return array_map(
+            $this->toStatement(...),
+            $this->executor->select($this->aggregatedQuery('mean_exec_time DESC NULLS LAST'), [self::LIMIT]),
+        );
+    }
+
+    /**
+     * The most-executed shapes of query, ranked by raw call count rather than
+     * by cost.
+     *
+     * {@see self::slowest()} answers "what is expensive per call", and an N+1
+     * loop is invisible there on purpose: a single-row lookup by key is fast
+     * every time, so its mean sits near the bottom of that list however many
+     * hundred thousand times it ran. Ranking by calls instead is the only
+     * ordering that puts a loop at the top rather than hiding it below fifty
+     * genuinely slow statements.
+     *
+     * @return list<Statement>
+     */
+    public function busiest(): array
+    {
+        return array_map(
+            $this->toStatement(...),
+            $this->executor->select($this->aggregatedQuery('calls DESC NULLS LAST'), [self::LIMIT]),
+        );
+    }
+
+    /**
+     * The GROUP BY every reading of pg_stat_statements shares, differing only in
+     * how the summed rows are ordered before the limit is applied.
+     *
+     * The NOT LIKE keeps Vacuum's own reading of the statistics out of the
+     * statistics. A dashboard reporting the cost of watching the dashboard is
+     * a dashboard nobody trusts twice.
+     *
+     * A null queryid is dropped rather than grouped: the server could not
+     * identify those statements, so they are not one shape, and collapsing
+     * them together would invent a query that nobody ran.
+     *
+     * $orderBy is never reader input -- it is one of two literal strings this
+     * class writes itself -- so building the ORDER BY clause with it carries
+     * none of the risk string-built SQL normally would.
+     */
+    private function aggregatedQuery(string $orderBy): string
+    {
+        return <<<SQL
             SELECT
                 queryid,
                 min(query) AS query,
@@ -65,11 +103,9 @@ final readonly class Statements
                 AND queryid IS NOT NULL
                 AND query NOT LIKE '%pg_stat_%'
             GROUP BY queryid
-            ORDER BY mean_exec_time DESC NULLS LAST
+            ORDER BY {$orderBy}
             LIMIT ?
             SQL;
-
-        return array_map($this->toStatement(...), $this->executor->select($sql, [self::LIMIT]));
     }
 
     /**

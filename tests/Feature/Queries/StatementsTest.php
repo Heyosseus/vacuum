@@ -122,3 +122,44 @@ it('keeps its own reading of the statistics out of the statistics', function ():
 
     expect($found)->toBeEmpty();
 })->skip(fn (): bool => ! statementsInstalled(), 'pg_stat_statements is not installed on this server.');
+
+/**
+ * busiest() exists because slowest() ranks by mean time, and a query run a
+ * great many times but cheap on each call sits near the bottom of that
+ * ordering rather than the top. Running the same crate lookup far more often
+ * than a slower, unrelated one proves busiest() puts call count ahead of mean
+ * time.
+ *
+ * This does not assert the crate lookup is first overall: PDO's own
+ * DEALLOCATE bookkeeping is itself a statement pg_stat_statements records,
+ * and how many of those a shared test connection has accumulated is not this
+ * class's concern to control. What busiest() promises is that call count
+ * decides the order it does control -- the crate lookup ranking ahead of the
+ * far slower, once-run pg_sleep is exactly that.
+ */
+it('ranks statements by call count rather than by mean time', function (): void {
+    for ($i = 0; $i < 5; $i++) {
+        DB::select("SELECT id FROM crates WHERE label = 'crate 1'");
+    }
+    DB::select('SELECT pg_sleep(0.05)');
+
+    $busiest = app(Statements::class)->busiest();
+
+    $indexOf = static function (string $needle) use ($busiest): ?int {
+        foreach ($busiest as $index => $statement) {
+            if (str_contains($statement->sql, $needle)) {
+                return $index;
+            }
+        }
+
+        return null;
+    };
+
+    $crateIndex = $indexOf('FROM crates');
+    $sleepIndex = $indexOf('pg_sleep');
+
+    expect($crateIndex)->not->toBeNull()
+        ->and($busiest[$crateIndex]->calls)->toBe(5)
+        ->and($sleepIndex)->not->toBeNull()
+        ->and($crateIndex)->toBeLessThan($sleepIndex);
+})->skip(fn (): bool => ! statementsInstalled(), 'pg_stat_statements is not installed on this server.');

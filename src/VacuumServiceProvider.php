@@ -53,6 +53,21 @@ use Heyosseus\Vacuum\Filament\Install\SyntaxChecker;
 use Heyosseus\Vacuum\Filament\Support\HistoryPanel;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Http\Middleware\Authorize;
+use Heyosseus\Vacuum\Learn\Curriculum;
+use Heyosseus\Vacuum\Learn\Lesson;
+use Heyosseus\Vacuum\Learn\Lessons\ChunkingLargeTables as ChunkingLargeTablesLesson;
+use Heyosseus\Vacuum\Learn\Lessons\DeadTuples as DeadTuplesLesson;
+use Heyosseus\Vacuum\Learn\Lessons\Fillfactor as FillfactorLesson;
+use Heyosseus\Vacuum\Learn\Lessons\FrameworkTables as FrameworkTablesLesson;
+use Heyosseus\Vacuum\Learn\Lessons\HeapPage as HeapPageLesson;
+use Heyosseus\Vacuum\Learn\Lessons\JsonColumns as JsonColumnsLesson;
+use Heyosseus\Vacuum\Learn\Lessons\NPlusOne as NPlusOneLesson;
+use Heyosseus\Vacuum\Learn\Lessons\RowVersions as RowVersionsLesson;
+use Heyosseus\Vacuum\Learn\Lessons\SoftDeletes as SoftDeletesLesson;
+use Heyosseus\Vacuum\Learn\Lessons\TimestampsAndHot as TimestampsAndHotLesson;
+use Heyosseus\Vacuum\Learn\Lessons\TransactionsAndLocks as TransactionsAndLocksLesson;
+use Heyosseus\Vacuum\Learn\Lessons\UnindexedForeignKeys as UnindexedForeignKeysLesson;
+use Heyosseus\Vacuum\Learn\Lessons\UnusedIndexes as UnusedIndexesLesson;
 use Heyosseus\Vacuum\Queries\BloatEstimates;
 use Heyosseus\Vacuum\Queries\CacheStatistics;
 use Heyosseus\Vacuum\Queries\IndexDuplicates;
@@ -102,6 +117,9 @@ final class VacuumServiceProvider extends ServiceProvider
 
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
+
+    /** Tag a Lesson with this to have it appear in the Learn curriculum. */
+    public const string LESSONS = 'vacuum.lessons';
 
     /**
      * The inspections registered so far, tagged together once registration ends.
@@ -268,6 +286,38 @@ final class VacuumServiceProvider extends ServiceProvider
 
             return new Advisor($inspections);
         });
+
+        // Registration order is teaching order within a tier: byTier() keeps
+        // lessons in the order they were tagged, so this list is also the
+        // sequence a reader meets them in.
+        //
+        // The Eloquent tier comes first because it is the on-ramp: a reader
+        // arrives fluent in $model->update() and has never heard of a heap, so
+        // the first thing they meet is their own ORM, and each of these lessons
+        // points down into the PostgreSQL tiers underneath it.
+        $this->app->tag(
+            [
+                UnindexedForeignKeysLesson::class,
+                NPlusOneLesson::class,
+                SoftDeletesLesson::class,
+                FrameworkTablesLesson::class,
+                TimestampsAndHotLesson::class,
+                ChunkingLargeTablesLesson::class,
+                JsonColumnsLesson::class,
+                TransactionsAndLocksLesson::class,
+                RowVersionsLesson::class,
+                FillfactorLesson::class,
+                DeadTuplesLesson::class,
+                UnusedIndexesLesson::class,
+                HeapPageLesson::class,
+            ],
+            self::LESSONS,
+        );
+
+        $this->app->bind(
+            Curriculum::class,
+            fn (Application $app): Curriculum => new Curriculum($this->rules($app, self::LESSONS, Lesson::class)),
+        );
     }
 
     /**

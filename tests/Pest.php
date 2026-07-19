@@ -8,6 +8,7 @@ use Heyosseus\Vacuum\Tests\FilamentTestCase;
 use Heyosseus\Vacuum\Tests\FilamentUiTestCase;
 use Heyosseus\Vacuum\Tests\HistoryTestCase;
 use Heyosseus\Vacuum\Tests\InternalsTestCase;
+use Heyosseus\Vacuum\Tests\LearnDisabledTestCase;
 use Heyosseus\Vacuum\Tests\TestCase;
 use Heyosseus\Vacuum\Values\Setting;
 
@@ -34,6 +35,12 @@ uses(FilamentUiTestCase::class)->in('FilamentUi');
  * the internals explorers routable rather than merely constructible.
  */
 uses(InternalsTestCase::class)->in('Internals');
+
+/*
+ * Learn is the other way round -- on by default -- so the case that proves its
+ * switch works is the one that turns it off before routes are registered.
+ */
+uses(LearnDisabledTestCase::class)->in('LearnDisabled');
 
 /*
  * The smoke tests boot a real Filament panel with Vacuum's plugin on it, so they

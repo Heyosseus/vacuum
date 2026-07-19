@@ -101,3 +101,36 @@ it('does not call a fillfactor an autovacuum setting', function (): void {
     // The table has a storage parameter, but autovacuum is still the server's.
     expect(profile()->tuned)->toBeFalse();
 });
+
+it('reads every table largest first', function (): void {
+    DB::insert("INSERT INTO crates (label) SELECT 'crate ' || i FROM generate_series(1, 500) i");
+    flushStatistics();
+
+    $profiles = app(TableProfiles::class)->all();
+
+    expect($profiles)->not->toBeEmpty();
+
+    $sizes = array_map(static fn (Heyosseus\Vacuum\Values\TableProfile $p): int => $p->totalBytes, $profiles);
+    $sorted = $sizes;
+    rsort($sorted);
+
+    expect($sizes)->toBe($sorted);
+});
+
+it('reports the fillfactor a table set for itself', function (): void {
+    DB::statement('DROP TABLE IF EXISTS roomy');
+    DB::statement('CREATE TABLE roomy (id serial PRIMARY KEY, label text) WITH (fillfactor = 70)');
+    flushStatistics();
+
+    $profiles = app(TableProfiles::class)->all();
+
+    DB::statement('DROP TABLE roomy');
+
+    $byName = [];
+    foreach ($profiles as $p) {
+        $byName[$p->name] = $p;
+    }
+
+    expect($byName['roomy']->fillfactor)->toBe(70)
+        ->and($byName['crates']->fillfactor)->toBeNull();
+});

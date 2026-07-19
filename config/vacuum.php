@@ -284,4 +284,21 @@ return [
         'page_sample_limit' => env('VACUUM_INTERNALS_PAGE_SAMPLE_LIMIT', 100),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Learn
+    |--------------------------------------------------------------------------
+    |
+    | The /learn section teaches PostgreSQL using the reader's own tables. It
+    | reads the catalog and the statistics views only -- the same ground every
+    | other panel already stands on -- so it is safe to leave on in production.
+    | On by default, because a package that teaches only when configured to
+    | teaches nobody.
+    |
+    */
+
+    'learn' => [
+        'enabled' => env('VACUUM_LEARN_ENABLED', true),
+    ],
+
 ];

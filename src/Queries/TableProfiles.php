@@ -6,6 +6,7 @@ namespace Heyosseus\Vacuum\Queries;
 
 use Heyosseus\Vacuum\Database\ReadOnlyExecutor;
 use Heyosseus\Vacuum\Support\Cast;
+use Heyosseus\Vacuum\Support\IgnoredSchemas;
 use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\TableProfile;
 
@@ -20,9 +21,12 @@ final readonly class TableProfiles
 {
     private const string STATEMENT = 'table_profile';
 
+    private const string ALL_STATEMENT = 'table_profiles';
+
     public function __construct(
         private ReadOnlyExecutor $executor,
         private SqlRepository $sql,
+        private IgnoredSchemas $ignored,
     ) {}
 
     /**
@@ -34,6 +38,25 @@ final readonly class TableProfiles
         $rows = $this->executor->select($this->sql->get(self::STATEMENT), [$schema, $table]);
 
         return $rows === [] ? null : $this->toProfile($rows[0]);
+    }
+
+    /**
+     * Every table PostgreSQL is tracking statistics for, largest first, minus the
+     * schemas the application has asked Vacuum to leave alone. A lesson that needs
+     * to talk about "the reader's biggest table" or walk every table in turn has no
+     * name to bind, so this is the same query with the predicate that names one
+     * table swapped for the one that excludes a schema.
+     *
+     * @return list<TableProfile>
+     */
+    public function all(): array
+    {
+        $rows = $this->executor->select(
+            $this->sql->get(self::ALL_STATEMENT),
+            [implode(',', $this->ignored->all())],
+        );
+
+        return array_map($this->toProfile(...), $rows);
     }
 
     /**
@@ -89,6 +112,13 @@ final readonly class TableProfiles
                 $options['autovacuum_analyze_threshold'] ?? $row['analyze_threshold'] ?? null,
             ),
             tuned: $this->overridesAutovacuum($options),
+
+            // A fillfactor is a storage parameter, not an autovacuum one, so it is
+            // read straight from the already-parsed reloptions rather than through
+            // overridesAutovacuum(). Left null when the table never set one, which
+            // is the common case: PostgreSQL does not write fillfactor=100 back out
+            // just because that happens to be the default.
+            fillfactor: isset($options['fillfactor']) ? (int) $options['fillfactor'] : null,
         );
     }
 
