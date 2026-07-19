@@ -59,16 +59,29 @@ it('shows what the advisor found on the database it is pointed at', function ():
 });
 
 it('says so plainly when no table, index or session has anything wrong with it', function (): void {
-    // The configuration and patch-posture rules judge the server itself rather
-    // than any table, so they still have an opinion here -- this test database
-    // is not running the latest minor -- and the findings panel is expected to
-    // carry that one entry rather than sit empty.
+    // The configuration rules judge the server itself rather than any table, so
+    // they still have an opinion here, and the findings panel is expected to
+    // carry that entry rather than sit empty.
+    //
+    // The condition is arranged rather than assumed. The obvious server-level
+    // finding to lean on is unpatched-server, but whether it fires depends on
+    // the minor release the server happens to be running: a developer's machine
+    // drifts behind and reports it, while CI pulls the postgres:N image, which
+    // is always the latest minor, and reports nothing. Asserting on it makes
+    // this test pass or fail on how recently somebody ran apt upgrade.
+    //
+    // track_io_timing is a fact this test can state instead of hope for. It is
+    // session-settable, so turning it off here guarantees io-timing-off fires on
+    // every supported major and in either environment. The setting dies with the
+    // connection, which TestCase purges after each test.
+    DB::statement('SET track_io_timing = off');
+
     Vacuum::auth(static fn (Request $request): bool => true);
 
     $this->get('/vacuum')
         ->assertDontSee('Nothing to report')
         ->assertSee('Grade A')
-        ->assertSee('unpatched-server');
+        ->assertSee('io-timing-off');
 });
 
 it('cannot award a grade its own findings disagree with', function (): void {
