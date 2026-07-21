@@ -276,6 +276,39 @@ it('keeps only the first index it finds when a table carries two that both menti
     }
 });
 
+/**
+ * tablesWithUpdatedAtIndex() walks every index in the database, including the
+ * ones belonging to tables that have no updated_at column at all, and skips
+ * those before it ever looks at the index name.
+ *
+ * Nothing else in this file reaches that skip: every table the fixtures build
+ * carries updated_at, so on a database holding only them the loop never meets
+ * an index it has to pass over. A shared development database happens to be
+ * full of such tables and hides this; a clean CI database is not, which is
+ * where it showed. Hence a table that deliberately has no timestamps at all.
+ */
+it('passes over an index belonging to a table with no updated_at column', function (): void {
+    DB::statement('DROP TABLE IF EXISTS learn_hot_no_timestamp');
+    DB::statement('CREATE TABLE learn_hot_no_timestamp (id serial PRIMARY KEY, label text)');
+    DB::statement('CREATE INDEX learn_hot_no_timestamp_label_idx ON learn_hot_no_timestamp (label)');
+
+    DB::insert("INSERT INTO learn_hot_no_timestamp (label) SELECT 'x' || i FROM generate_series(1, 200) i");
+    DB::update("UPDATE learn_hot_no_timestamp SET label = label || '!'");
+
+    flushStatistics();
+
+    try {
+        $observation = timestampsLesson()->observe();
+
+        $tables = array_column($observation->rows, 0);
+
+        expect($tables)->not->toContain('public.learn_hot_no_timestamp')
+            ->and($observation->headline)->not->toContain('learn_hot_no_timestamp');
+    } finally {
+        DB::statement('DROP TABLE IF EXISTS learn_hot_no_timestamp');
+    }
+});
+
 it('renders both branches when nothing landed on either', function (): void {
     $tree = timestampsLesson()->fork([], []);
 
