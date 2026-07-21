@@ -50,11 +50,17 @@ enum MetricKind: string
     }
 
     /**
-     * Whether the value only ever climbs, so a straight line fit through it can be
-     * projected forward to when it crosses a threshold. Cumulative counters climb
-     * too, but nobody forecasts them; these are the levels a forecast is about.
+     * Whether a threshold crossing is a meaningful thing to project for this kind.
+     *
+     * Not the same claim as "only ever climbs", which these do not: age(relfrozenxid)
+     * drops to nearly nothing on every freeze and bloat drops on every VACUUM FULL,
+     * so both are sawtooths. What makes them forecastable is that each *tooth* is a
+     * climb toward a fixed limit that matters -- which is why the fit is taken over
+     * the climb since the last reset rather than over the whole series. Cumulative
+     * counters climb far more reliably and are not here: nobody needs to know when
+     * a block-read total will reach a number.
      */
-    public function isMonotonic(): bool
+    public function isForecastable(): bool
     {
         return match ($this) {
             self::TableXidAge, self::TableBloatBytes => true,

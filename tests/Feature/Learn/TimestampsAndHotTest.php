@@ -104,6 +104,9 @@ function timestampsIndexStatistic(array $overrides = []): IndexStatistic
         'unique' => false,
         'primary' => false,
         'valid' => true,
+        'constraintOwned' => false,
+        'replicaIdentity' => false,
+        'partitionChild' => false,
         'countingSince' => null,
     ];
 

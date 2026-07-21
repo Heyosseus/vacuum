@@ -53,3 +53,30 @@ it('resolves its own clock when none is given', function (): void {
     // rule built with no arguments does not blow up reaching for now().
     expect((new EndOfLifeMajor)->inspect(versioned(170_005)))->toBeNull();
 });
+
+it('calls a genuinely dead major critical even without a date for it', function (): void {
+    // PostgreSQL 12 went out of support on 2024-11-14 and is still very common.
+    // The release table started at 13, endOfLife() answered null for anything
+    // older, and this rule then returned null -- so the one version most likely
+    // to need catching passed the rule whose entire job is catching it.
+    $finding = (new EndOfLifeMajor(new DateTimeImmutable('2026-07-21')))->inspect(versioned(120_022));
+
+    expect($finding)->not->toBeNull()
+        ->and($finding->rule)->toBe('end-of-life-major')
+        ->and($finding->severity)->toBe(Severity::Critical)
+        ->and($finding->summary)->toContain('PostgreSQL 12');
+});
+
+it('calls a major older still critical too', function (): void {
+    $finding = (new EndOfLifeMajor(new DateTimeImmutable('2026-07-21')))->inspect(versioned(90_600));
+
+    expect($finding)->not->toBeNull()
+        ->and($finding->severity)->toBe(Severity::Critical);
+});
+
+it('stays silent about a major newer than the table, which is a different kind of unknown', function (): void {
+    // Below the floor, "unknown" means "dead for years". Above the top, it means
+    // "released after this file was written", and telling somebody their
+    // brand-new server is unsupported is the wrong way round to be wrong.
+    expect((new EndOfLifeMajor(new DateTimeImmutable('2026-07-21')))->inspect(versioned(190_001)))->toBeNull();
+});

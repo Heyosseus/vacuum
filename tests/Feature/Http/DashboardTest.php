@@ -70,18 +70,31 @@ it('says so plainly when no table, index or session has anything wrong with it',
     // is always the latest minor, and reports nothing. Asserting on it makes
     // this test pass or fail on how recently somebody ran apt upgrade.
     //
-    // track_io_timing is a fact this test can state instead of hope for. It is
-    // session-settable, so turning it off here guarantees io-timing-off fires on
-    // every supported major and in either environment. The setting dies with the
-    // connection, which TestCase purges after each test.
-    DB::statement('SET track_io_timing = off');
+    // track_io_timing is a fact this test can state instead of hope for -- but it
+    // has to be stated to the *server*, which is the whole lesson of the audit
+    // finding this test was rewritten for. The configuration rules read
+    // pg_settings.reset_val, so a session-level SET no longer reaches them, and
+    // that is correct: a SET is what Vacuum's own executor does to its
+    // connection, and an audit that could be moved by one is auditing itself.
+    //
+    // ALTER DATABASE is the smallest lever that changes what a session would
+    // reset to. It applies to sessions opened afterwards, so the connection is
+    // purged before the request and the setting removed again at the end.
+    $database = DB::getDatabaseName();
+
+    DB::statement("ALTER DATABASE \"{$database}\" SET track_io_timing = off");
+    DB::purge();
 
     Vacuum::auth(static fn (Request $request): bool => true);
 
-    $this->get('/vacuum')
-        ->assertDontSee('Nothing to report')
-        ->assertSee('Grade A')
-        ->assertSee('io-timing-off');
+    try {
+        $this->get('/vacuum')
+            ->assertDontSee('Nothing to report')
+            ->assertSee('io-timing-off');
+    } finally {
+        DB::statement("ALTER DATABASE \"{$database}\" RESET track_io_timing");
+        DB::purge();
+    }
 });
 
 it('cannot award a grade its own findings disagree with', function (): void {

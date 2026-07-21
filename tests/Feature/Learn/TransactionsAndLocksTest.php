@@ -66,6 +66,7 @@ function timeoutSettings(?string $value, ?string $unit = 's'): Settings
         'idle_in_transaction_session_timeout' => new Setting(
             name: 'idle_in_transaction_session_timeout',
             value: $value,
+            resetValue: $value,
             unit: $unit,
             context: 'sighup',
             source: 'configuration file',

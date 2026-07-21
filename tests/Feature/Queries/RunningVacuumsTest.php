@@ -35,3 +35,24 @@ it('reads a vacuum in progress the way postgresql reports one', function (): voi
         ->and($vacuum->automatic)->toBeTrue()
         ->and($vacuum->startedAt)->not->toBeNull();
 });
+
+it('scopes the progress view to this database, and survives a relation it cannot name', function (): void {
+    // pg_stat_progress_vacuum reports every vacuuming backend in the *cluster* --
+    // it carries datid and datname precisely because it is not database-scoped --
+    // while pg_class is per-database. CREATE DATABASE ... TEMPLATE copies pg_class
+    // including its OIDs, so two databases hold different relations under the same
+    // numbers, and an unscoped join reports another database's vacuum as a vacuum
+    // of whichever local table happens to share the OID. Where the OIDs do not
+    // collide the inner join simply dropped the row and a running vacuum vanished
+    // from the panel.
+    $sql = app(SqlRepository::class)->get('vacuum_progress');
+
+    expect($sql)->toContain('progress.datid')
+        ->and($sql)->toContain('current_database()')
+        // Outer, so a relation dropped mid-vacuum degrades to an unnamed row
+        // rather than disappearing.
+        ->and($sql)->toContain('LEFT JOIN pg_class');
+
+    // And the statement still runs against the real view, joins and bindings intact.
+    expect(app(RunningVacuums::class)->all())->toBe([]);
+});

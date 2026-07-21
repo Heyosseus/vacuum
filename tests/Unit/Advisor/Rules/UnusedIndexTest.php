@@ -23,6 +23,9 @@ function anIndex(
         unique: $unique,
         primary: $primary,
         valid: true,
+        constraintOwned: false,
+        replicaIdentity: false,
+        partitionChild: false,
         countingSince: $countingSince,
     );
 }

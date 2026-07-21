@@ -97,7 +97,7 @@ it('replaces the cache-hit sentence with the interval figure', function (): void
 
     $view = present($finding);
 
-    expect($view->intervalSummary)->toContain('over the last interval')
+    expect($view->intervalSummary)->toContain('over the last 1 hour')
         ->and($view->summary())->toBe($view->intervalSummary);
 });
 
@@ -117,7 +117,7 @@ it('replaces the slow-statement sentence with the interval figure', function ():
 
     $view = present($finding);
 
-    expect($view->intervalSummary)->toContain('over the last interval')
+    expect($view->intervalSummary)->toContain('over the last 1 hour')
         ->and($view->intervalSummary)->toContain('20 ms');
 });
 

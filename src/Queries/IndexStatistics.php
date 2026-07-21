@@ -38,9 +38,20 @@ final readonly class IndexStatistics
                 indexes.indisunique,
                 indexes.indisprimary,
                 indexes.indisvalid,
+                indexes.indisreplident,
+                relations.relispartition,
+                EXISTS (
+                    SELECT 1
+                    FROM pg_depend AS dependencies
+                    WHERE dependencies.classid = 'pg_class'::regclass
+                      AND dependencies.objid = statistics.indexrelid
+                      AND dependencies.refclassid = 'pg_constraint'::regclass
+                      AND dependencies.deptype = 'i'
+                ) AS constraint_owned,
                 (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS counting_since
             FROM pg_stat_user_indexes AS statistics
             JOIN pg_index AS indexes ON indexes.indexrelid = statistics.indexrelid
+            JOIN pg_class AS relations ON relations.oid = statistics.indexrelid
             WHERE statistics.schemaname <> ALL (string_to_array(?, ','))
             ORDER BY statistics.idx_scan, pg_relation_size(statistics.indexrelid) DESC
             SQL;
@@ -65,6 +76,9 @@ final readonly class IndexStatistics
             unique: Cast::boolean($row['indisunique'] ?? null),
             primary: Cast::boolean($row['indisprimary'] ?? null),
             valid: Cast::boolean($row['indisvalid'] ?? null),
+            constraintOwned: Cast::boolean($row['constraint_owned'] ?? null),
+            replicaIdentity: Cast::boolean($row['indisreplident'] ?? null),
+            partitionChild: Cast::boolean($row['relispartition'] ?? null),
             countingSince: Cast::timestamp($row['counting_since'] ?? null),
         );
     }

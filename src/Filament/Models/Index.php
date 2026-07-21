@@ -28,6 +28,9 @@ use Override;
  * @property bool $is_unique
  * @property bool $is_primary
  * @property bool $is_valid
+ * @property bool $is_constraint_owned
+ * @property bool $is_replica_identity
+ * @property bool $is_partition_child
  */
 final class Index extends Model
 {
@@ -48,6 +51,9 @@ final class Index extends Model
         'is_unique' => 'boolean',
         'is_primary' => 'boolean',
         'is_valid' => 'boolean',
+        'is_constraint_owned' => 'boolean',
+        'is_replica_identity' => 'boolean',
+        'is_partition_child' => 'boolean',
     ];
 
     /**
@@ -76,9 +82,17 @@ final class Index extends Model
      * Whether the index is a rule the database enforces rather than a shortcut it
      * offers. A unique or primary index may be read by nothing and still earn its keep
      * on every write; an ordinary one that nothing reads is pure cost.
+     *
+     * Also true of any index PostgreSQL would refuse to drop -- one a constraint
+     * depends on, the replica identity, a partition child -- so this panel and the
+     * advisor answer the same question the same way.
      */
     public function constrains(): bool
     {
-        return $this->is_primary || $this->is_unique;
+        return $this->is_primary
+            || $this->is_unique
+            || $this->is_constraint_owned
+            || $this->is_replica_identity
+            || $this->is_partition_child;
     }
 }

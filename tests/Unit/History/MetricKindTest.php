@@ -24,9 +24,9 @@ it('knows which kinds are cumulative counters', function (): void {
 });
 
 it('knows which kinds a forecast may be drawn through', function (): void {
-    expect(MetricKind::TableXidAge->isMonotonic())->toBeTrue()
-        ->and(MetricKind::TableBloatBytes->isMonotonic())->toBeTrue()
-        ->and(MetricKind::TableDeadTuples->isMonotonic())->toBeFalse()
-        ->and(MetricKind::DbCache->isMonotonic())->toBeFalse()
-        ->and(MetricKind::Statement->isMonotonic())->toBeFalse();
+    expect(MetricKind::TableXidAge->isForecastable())->toBeTrue()
+        ->and(MetricKind::TableBloatBytes->isForecastable())->toBeTrue()
+        ->and(MetricKind::TableDeadTuples->isForecastable())->toBeFalse()
+        ->and(MetricKind::DbCache->isForecastable())->toBeFalse()
+        ->and(MetricKind::Statement->isForecastable())->toBeFalse();
 });
