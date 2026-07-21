@@ -104,3 +104,70 @@ it('keeps the trailing semicolon everybody types from breaking the wrap', functi
     expect($result->rows)->toHaveCount(2)
         ->and($result->capped)->toBeTrue();
 });
+
+/**
+ * The row cap bounds how many results come back and says nothing about how wide
+ * each one is. Three hundred rows of a megabyte each sits well inside a cap of
+ * five hundred and is three hundred megabytes into a web worker, produced in
+ * under a second -- and statement_timeout cannot stop it, because the timeout
+ * bounds execution rather than transfer. So a byte budget rides alongside, kept
+ * as a running total the server filters on, which is the same shape as the row
+ * cap and works for the same reason: the rows past it are never sent.
+ */
+it('stops sending rows once they have cost more than the byte budget', function (): void {
+    config()->set('vacuum.console.max_rows', 500);
+    config()->set('vacuum.console.max_bytes', 50_000);
+
+    // Twenty rows of ten kilobytes: 200 kB in total, four times the budget, and
+    // nowhere near the row cap.
+    $result = app(Console::class)->run("SELECT repeat('x', 10000) AS wide FROM generate_series(1, 20)");
+
+    expect($result->rows)->not->toBeEmpty()
+        ->and(count($result->rows))->toBeLessThan(20)
+        ->and($result->capped)->toBeTrue();
+});
+
+it('keeps the row that crosses the budget, so a cut answer is never an empty one', function (): void {
+    // Dropping every row over the budget would make one enormous row indistinguishable
+    // from no rows at all, and "0 rows" is a worse lie than "here is the first one".
+    config()->set('vacuum.console.max_rows', 500);
+    config()->set('vacuum.console.max_bytes', 100);
+
+    $result = app(Console::class)->run("SELECT repeat('x', 10000) AS wide FROM generate_series(1, 5)");
+
+    expect($result->rows)->toHaveCount(1)
+        ->and($result->capped)->toBeTrue();
+});
+
+it('leaves a result inside both budgets alone', function (): void {
+    config()->set('vacuum.console.max_rows', 500);
+    config()->set('vacuum.console.max_bytes', 8 * 1024 * 1024);
+
+    $result = app(Console::class)->run('SELECT generate_series(1, 3) AS n');
+
+    expect($result->rows)->toHaveCount(3)
+        ->and($result->capped)->toBeFalse();
+});
+
+it('does not leak its own bookkeeping columns into the result', function (): void {
+    // The wrapper adds a running byte total and a row count to decide whether the
+    // answer was cut. What the reader asked for is what they get back.
+    $result = app(Console::class)->run('SELECT 1 AS n');
+
+    expect($result->columns)->toBe(['n'])
+        ->and(array_keys($result->rows[0]))->toBe(['n']);
+});
+
+it('runs the statement the guard approved rather than the one that was typed', function (): void {
+    // The structural half of the console fix: a comment is stripped once, by the
+    // guard, and the string it returns is the string that reaches PostgreSQL.
+    // Checking one and executing the other is what let a payload hide inside a
+    // literal.
+    $sent = statementsSentBy(function (): void {
+        app(Console::class)->run("SELECT 1 AS n -- a trailing comment\n");
+    });
+
+    $select = collect($sent)->first(fn (string $sql): bool => str_contains($sql, 'AS n'));
+
+    expect($select)->not->toContain('a trailing comment');
+});

@@ -109,10 +109,17 @@ return [
     | list is not a security boundary and it is not offered as one.
     |
     | 'timeout' is the per-statement timeout in milliseconds (statement_timeout).
-    | 'max_rows' caps the rows, and is asked of PostgreSQL rather than applied to
-    | the answer: the console wraps your statement so the rows past the cap are
-    | never produced. It bounds the number of rows and not the width of one, so a
-    | single enormous value is still bounded only by 'timeout' and memory_limit.
+    | 'max_rows' caps the rows and 'max_bytes' caps how much they may weigh, and
+    | both are asked of PostgreSQL rather than applied to the answer: the console
+    | wraps your statement so the rows past either cap are never produced and
+    | never sent. Rows alone were not enough -- three hundred rows of a megabyte
+    | each is well inside a cap of five hundred and is three hundred megabytes
+    | into a web worker, and 'timeout' cannot stop it because it bounds how long a
+    | statement runs rather than how much it hands back.
+    |
+    | The row that crosses the byte budget is kept, so a cut result is never
+    | silently an empty one. A single enormous value is therefore still bounded
+    | only by 'timeout' and PHP's memory_limit, as it always was.
     |
     */
 
@@ -120,6 +127,7 @@ return [
         'enabled' => env('VACUUM_CONSOLE_ENABLED', false),
         'timeout' => env('VACUUM_CONSOLE_TIMEOUT', 5_000),
         'max_rows' => env('VACUUM_CONSOLE_MAX_ROWS', 500),
+        'max_bytes' => env('VACUUM_CONSOLE_MAX_BYTES', 8 * 1024 * 1024),
 
         // EXPLAIN ANALYZE actually runs the query it is explaining. The read-only
         // transaction still stops it writing, but nothing stops it reading a

@@ -243,3 +243,23 @@ it('chooses filament from a prompt when no flag is given', function (): void {
         ->expectsChoice('How should Vacuum serve its UI?', 'filament', ['blade', 'filament'])
         ->assertExitCode(Command::SUCCESS);
 });
+
+it('says the write failed rather than announcing a panel it never wired', function (): void {
+    // The outcome that did not exist until the installer started checking its own
+    // filesystem calls. Without it, an install that changed nothing printed
+    // "Vacuum's plugin was added" and sent the reader off to set
+    // VACUUM_UI=filament for a panel with no plugin in it.
+    $path = writeProvider($this->dir, 'AdminPanelProvider');
+    $original = (string) file_get_contents($path);
+    mkdir($path.'.vacuum-pending');
+
+    try {
+        $code = Artisan::call('vacuum:install', ['--filament' => true, '--panel-dir' => $this->dir, '--force' => true]);
+
+        expect($code)->toBe(Command::SUCCESS)
+            ->and(Artisan::output())->toContain('could not write')
+            ->and(file_get_contents($path))->toBe($original);
+    } finally {
+        rmdir($path.'.vacuum-pending');
+    }
+});
