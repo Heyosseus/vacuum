@@ -156,9 +156,24 @@ jobs:
         if: ${{ ! matrix.database-only }}
         run: composer test:types
 
+      # Run single-process on purpose. Pest 4's type-coverage plugin forks the
+      # analysis across `maxProcesses / 3` workers, and every worker read-modify-
+      # writes one shared result cache at vendor/pestphp/pest-plugin-type-coverage
+      # /.temp/v3.php. Its lock is `flock(LOCK_EX | LOCK_NB)` retried 100 times at
+      # 1ms — and when those 100ms run out it does the write *without* the lock
+      # anyway. Two workers then file_put_contents() the same file at once, the
+      # next worker `include`s the interleaved result, and the run dies on a parse
+      # error inside the cache rather than on anything wrong with this package.
+      #
+      # `__PEST_PLUGIN_ENV` is the plugin's own switch for that: set, it pins the
+      # analysis to one process, so there is never a second writer. It is read
+      # from `$_ENV`, which PHP only populates when `variables_order` contains E —
+      # the production ini shipped by setup-php does not — hence the -d.
       - name: Type coverage
         if: ${{ ! matrix.database-only }}
-        run: composer test:type-coverage
+        run: php -d variables_order=EGPCS vendor/bin/pest --type-coverage --min=100
+        env:
+          __PEST_PLUGIN_ENV: '1'
 
       # Only the coverage leg pays for line-coverage collection and the 100%
       # gate; the other legs run the same tests without instrumentation.
