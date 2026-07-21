@@ -183,7 +183,8 @@ final class InstallCommand extends Command
             InstallOutcome::Wired => $this->wired($file),
             InstallOutcome::AlreadyRegistered => $this->components->info("Vacuum is already registered in {$file}."),
             InstallOutcome::Unrecognised => $this->couldNotParse($file, $target),
-            InstallOutcome::SyntaxRestored => $this->restored($file, $target),
+            InstallOutcome::SyntaxRejected => $this->rejected($file, $target),
+            InstallOutcome::Failed => $this->failed($file, $target),
         };
     }
 
@@ -200,9 +201,18 @@ final class InstallCommand extends Command
         $this->manual($target);
     }
 
-    private function restored(string $file, string $target): void
+    private function rejected(string $file, string $target): void
     {
-        $this->components->warn("The edit to {$file} would not have parsed, so it was rolled back. Add Vacuum by hand:");
+        $this->components->warn("The edit to {$file} would not have parsed, so it was never written. Add Vacuum by hand:");
+        $this->manual($target);
+    }
+
+    private function failed(string $file, string $target): void
+    {
+        $this->components->warn(
+            "Vacuum could not write to {$file} -- check its permissions and the free space on the volume. "
+            .'Nothing was changed. Add Vacuum by hand:'
+        );
         $this->manual($target);
     }
 

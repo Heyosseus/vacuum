@@ -121,3 +121,45 @@ it('does call two partial indexes with the same predicate duplicates', function 
 
     expect(duplicates())->toHaveCount(1);
 });
+
+it('does not call two exclusion constraints with different operators copies of each other', function (): void {
+    // The indcollation bug through a different door, and this one is worse. Two
+    // exclusion constraints over the same column -- one WITH =, one WITH && --
+    // have byte-identical indkey, indclass, indcollation, indoption, indexprs and
+    // indpred, because the operators that make them different live in
+    // pg_constraint.conexclop and not in pg_index at all. Reported as duplicates,
+    // one of two unrelated rules gets a DROP.
+    DB::statement('CREATE EXTENSION IF NOT EXISTS btree_gist');
+    DB::statement('ALTER TABLE pallets ADD COLUMN during tstzrange');
+    DB::statement('ALTER TABLE pallets ADD CONSTRAINT pallets_exclude_equal EXCLUDE USING gist (depot_id WITH =)');
+    DB::statement('ALTER TABLE pallets ADD CONSTRAINT pallets_exclude_overlap EXCLUDE USING gist (during WITH &&)');
+
+    expect(duplicate('pallets_exclude_equal'))->toBeNull()
+        ->and(duplicate('pallets_exclude_overlap'))->toBeNull();
+})->skip(fn (): bool => ! DB::table('pg_available_extensions')->where('name', 'btree_gist')->exists(),
+    'btree_gist is not available on this server');
+
+it('does not call a NULLS NOT DISTINCT unique index a copy of an ordinary one', function (): void {
+    // The destructive variant. Both are unique indexes on the same column and
+    // agree on every column of pg_index that the signature used to read; one
+    // treats nulls as equal and is therefore strictly stricter. Called copies,
+    // the keeper tiebreak sorts on size then name -- so the stricter constraint
+    // can be the one the advice says to drop, and nothing errors. An integrity
+    // guarantee simply stops existing.
+    DB::statement('CREATE UNIQUE INDEX pallets_label_lax ON pallets (label)');
+    DB::statement('CREATE UNIQUE INDEX pallets_label_strict ON pallets (label) NULLS NOT DISTINCT');
+
+    expect(duplicate('pallets_label_lax'))->toBeNull()
+        ->and(duplicate('pallets_label_strict'))->toBeNull();
+})->skip(fn (): bool => serverVersionNumber() < 150_000, 'NULLS NOT DISTINCT is PostgreSQL 15 and newer');
+
+it('does not call an INCLUDE payload a copy of the bare index', function (): void {
+    // (label) INCLUDE (depot_id) serves index-only scans the bare index cannot,
+    // and it is the larger of the two -- so the keeper tiebreak would drop
+    // precisely the one that was doing more.
+    DB::statement('CREATE INDEX pallets_label_bare ON pallets (label)');
+    DB::statement('CREATE INDEX pallets_label_covering ON pallets (label) INCLUDE (depot_id)');
+
+    expect(duplicate('pallets_label_bare'))->toBeNull()
+        ->and(duplicate('pallets_label_covering'))->toBeNull();
+});

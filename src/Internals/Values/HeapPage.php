@@ -41,8 +41,43 @@ final readonly class HeapPage
     }
 
     /**
-     * Every HOT chain on the page, found by following each redirect line
-     * pointer to the heap-only tuples it leads to.
+     * Whether this page is laid out the way heap_page_items just read it.
+     *
+     * A heap page reserves no special area, so its special offset sits at the
+     * very end of the page. An index page does reserve one. The distinction
+     * matters because heap_page_items does not refuse a B-tree page -- it decodes
+     * index tuples as though they were heap tuples and returns a full,
+     * authoritative-looking panel of nothing, which is the worst way for a
+     * teaching tool to be wrong. RelationCatalog turns away the relkinds this can
+     * happen for and is the real fix; this is the second lock on the same door,
+     * and it is here rather than in the reader because a page can say for itself
+     * whether it is the shape it was read as.
+     */
+    public function isHeapLayout(): bool
+    {
+        return $this->special === $this->pageSize;
+    }
+
+    /**
+     * Every HOT chain on the page, found by following each chain root to the
+     * heap-only tuples it leads to.
+     *
+     * A chain has two possible roots and only one of them is a redirect. A
+     * redirect appears when the page is *pruned* -- the root tuple's storage is
+     * reclaimed and its line pointer is left behind pointing at the survivor.
+     * Before that happens, and it has not happened on a live table between
+     * autovacuums, the root is an ordinary LP_NORMAL tuple with HEAP_HOT_UPDATED
+     * set and its t_ctid pointing at the next version.
+     *
+     * Looking only for redirects therefore finds chains exactly when a vacuum has
+     * already been through, and reports "no HOT chains on this page" for the most
+     * common state a busy table is ever in -- which is precisely the state
+     * somebody tuning fillfactor opened this page to look at.
+     *
+     * The second root condition is hotUpdated && ! heapOnly: something updated
+     * this tuple within the page, and it is not itself a link in an earlier
+     * chain. Membership is tracked across the whole page so a tuple already
+     * walked into is never made the root of a second chain.
      *
      * @return list<HotChain>
      */
@@ -55,14 +90,35 @@ final readonly class HeapPage
         }
 
         $chains = [];
+        $claimed = [];
 
         foreach ($this->pointers as $pointer) {
-            if ($pointer->isRedirect) {
-                $chains[] = $this->follow($pointer, $byLineNumber);
+            if (! $this->rootsChain($pointer)) {
+                continue;
             }
+            if (isset($claimed[$pointer->lineNumber])) {
+                continue;
+            }
+            $chain = $this->follow($pointer, $byLineNumber);
+
+            foreach ($chain->lineNumbers as $lineNumber) {
+                $claimed[$lineNumber] = true;
+            }
+
+            $chains[] = $chain;
         }
 
         return $chains;
+    }
+
+    /**
+     * Whether a chain starts here: a redirect left by pruning, or an updated
+     * tuple that is not itself heap-only and so is the original row rather than
+     * a later version of one.
+     */
+    private function rootsChain(LinePointer $pointer): bool
+    {
+        return $pointer->isRedirect || ($pointer->hotUpdated && ! $pointer->heapOnly);
     }
 
     /**

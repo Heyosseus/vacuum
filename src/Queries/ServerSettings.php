@@ -51,8 +51,16 @@ final readonly class ServerSettings
     {
         $placeholders = implode(', ', array_fill(0, count(self::AUDITED), '?'));
 
+        // reset_val, not setting. Every query in this package runs inside a
+        // transaction that has already issued SET LOCAL statement_timeout, so
+        // pg_settings.setting reports the value Vacuum injected microseconds
+        // earlier rather than the one the server is configured to. reset_val is
+        // what a session would fall back to -- the role, database and
+        // postgresql.conf value -- and is immune to SET LOCAL, which is the
+        // only thing that makes a configuration audit of our own connection
+        // honest.
         $rows = $this->executor->select(
-            "SELECT name, setting, unit, context, source, boot_val, pending_restart
+            "SELECT name, setting, reset_val, unit, context, source, boot_val, pending_restart
              FROM pg_settings
              WHERE name IN ({$placeholders})",
             self::AUDITED,
@@ -66,6 +74,7 @@ final readonly class ServerSettings
             $settings[$name] = new Setting(
                 name: $name,
                 value: Cast::text($row['setting'] ?? null),
+                resetValue: Cast::text($row['reset_val'] ?? null),
                 unit: isset($row['unit']) ? Cast::text($row['unit']) : null,
                 context: Cast::text($row['context'] ?? null),
                 source: Cast::text($row['source'] ?? null),

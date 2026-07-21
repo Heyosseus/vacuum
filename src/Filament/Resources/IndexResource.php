@@ -75,7 +75,20 @@ final class IndexResource extends Resource
             ->addSelect(new Expression('pg_index.indisunique::int AS is_unique'))
             ->addSelect(new Expression('pg_index.indisprimary::int AS is_primary'))
             ->addSelect(new Expression('pg_index.indisvalid::int AS is_valid'))
-            ->join('pg_index', 'pg_index.indexrelid', '=', 'pg_stat_user_indexes.indexrelid');
+            ->addSelect(new Expression('pg_index.indisreplident::int AS is_replica_identity'))
+            ->addSelect(new Expression('pg_class.relispartition::int AS is_partition_child'))
+
+            // The same question the advisor asks: not "is it unique" but "would
+            // PostgreSQL let go of it". An exclusion constraint's index is
+            // neither unique nor primary and is still refused.
+            ->addSelect(new Expression(
+                "EXISTS (SELECT 1 FROM pg_depend WHERE pg_depend.classid = 'pg_class'::regclass"
+                .' AND pg_depend.objid = pg_stat_user_indexes.indexrelid'
+                ." AND pg_depend.refclassid = 'pg_constraint'::regclass"
+                ." AND pg_depend.deptype = 'i')::int AS is_constraint_owned"
+            ))
+            ->join('pg_index', 'pg_index.indexrelid', '=', 'pg_stat_user_indexes.indexrelid')
+            ->join('pg_class', 'pg_class.oid', '=', 'pg_stat_user_indexes.indexrelid');
     }
 
     #[Override]

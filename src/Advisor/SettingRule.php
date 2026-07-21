@@ -12,6 +12,8 @@ use Heyosseus\Vacuum\Values\Capabilities;
  * The subject is the whole server, so there is exactly one of it, and a rule here
  * is not looking for a bad table but a bad decision — usually one made during an
  * incident or a migration and never undone.
+ *
+ * @api Public API. Its shape is covered by the package version from 1.0 onward.
  */
 interface SettingRule
 {

@@ -203,6 +203,8 @@ final readonly class HeapPages implements Explorer
             isRedirect: $state === 'redirect',
             heapOnly: InfoMask::heapOnlyTuple($infomask2),
             hotUpdated: InfoMask::hotUpdated($infomask2),
+            lockedOnly: InfoMask::xmaxLockOnly($infomask),
+            xmaxInvalid: InfoMask::xmaxInvalid($infomask),
         );
     }
 

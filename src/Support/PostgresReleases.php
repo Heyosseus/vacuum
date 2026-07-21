@@ -11,9 +11,15 @@ namespace Heyosseus\Vacuum\Support;
  * world moves on. PostgreSQL ships a round of minor releases on the second
  * Thursday of February, May, August and November, so this table is good for at
  * most a quarter before it needs checking against postgresql.org/support/versioning
- * again. An unrecognised major answers null from both methods rather than a
- * guess: a version table that invents an answer for a major it has never heard
- * of would eventually tell somebody their supported server is unsupported.
+ * again.
+ *
+ * "Unrecognised" splits in two, and the direction matters. A major *newer* than
+ * this table is one PostgreSQL released after this file was written, and both
+ * methods answer null rather than guess -- a table that invents an answer there
+ * would eventually tell somebody their brand-new server is unsupported. A major
+ * *older* than the floor needs no table at all: every one of them is long dead,
+ * and answering null for those is how a PostgreSQL 12 cluster came to pass the
+ * rule whose entire job is catching it.
  */
 final class PostgresReleases
 {
@@ -44,6 +50,9 @@ final class PostgresReleases
         15 => '2027-11-11',
         14 => '2026-11-12',
         13 => '2025-11-13',
+        12 => '2024-11-14',
+        11 => '2023-11-09',
+        10 => '2022-11-10',
     ];
 
     public static function latestMinor(int $major): ?int
@@ -54,5 +63,18 @@ final class PostgresReleases
     public static function endOfLife(int $major): ?string
     {
         return self::END_OF_LIFE[$major] ?? null;
+    }
+
+    /**
+     * Whether this major is older than anything the table bothers to date.
+     *
+     * PostgreSQL 9.6 went out of support in 2021 and everything before it earlier
+     * still. There is no value in carrying dates back through them: below the
+     * floor, "unknown" and "dead for years" are the same answer, and the useful
+     * thing to say is the second one.
+     */
+    public static function isBelowSupportFloor(int $major): bool
+    {
+        return $major < min(array_keys(self::END_OF_LIFE));
     }
 }

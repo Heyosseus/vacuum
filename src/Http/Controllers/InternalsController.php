@@ -12,9 +12,11 @@ use Heyosseus\Vacuum\Queries\TableStatistics;
 use Heyosseus\Vacuum\Values\Capabilities;
 use Heyosseus\Vacuum\Values\TableStatistic;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View as Views;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * One real 8 kB heap page, opened block by block, so a reader can see a dead
@@ -54,27 +56,40 @@ final readonly class InternalsController
         $error = null;
 
         if ($chosen !== null) {
+            // PostgreSQL refusing either read belongs in the panel and not in a
+            // stack trace, and it is one answer however it arrives: pageinspect's
+            // functions are superuser-restricted, a relation can be dropped
+            // between the catalog lookup and the page read, a matview can exist
+            // without having been populated, and a role's privileges can change
+            // underneath a request. None of those is a bug in the page somebody
+            // asked for, and every one of them used to be a 500.
             try {
-                $blockCount = $this->heapPages->blockCount($schema, $table);
+                try {
+                    $blockCount = $this->heapPages->blockCount($schema, $table);
 
-                if ($pageAvailability->available) {
-                    $page = $this->heapPages->explore($schema, $table, $block);
+                    if ($pageAvailability->available) {
+                        $page = $this->heapPages->explore($schema, $table, $block);
+                    }
+                } catch (InvalidArgumentException $exception) {
+                    // Out of range, a relation that does not exist, or one that
+                    // stores no heap pages. The reader's URL is wrong rather than
+                    // the server, and the panel below says so.
+                    $error = $exception->getMessage();
                 }
-            } catch (InvalidArgumentException $exception) {
-                // Out of range, or a table that does not exist. Either way it is
-                // the reader's URL that is wrong, not the server, and the panel
-                // below says so rather than the framework's own error page.
-                $error = $exception->getMessage();
-            }
 
-            // Deliberately its own try: a block that does not exist must not
-            // hide the row versions, which do not depend on the block at all
-            // and need no extension to read.
-            try {
-                $rowVersions = $this->rowVersions->explore($schema, $table);
-            } catch (InvalidArgumentException) {
-                // The same missing relation the block lookup above already
-                // reported.
+                // Its own try for the same reason it always was: a block that does
+                // not exist must not hide the row versions, which do not depend on
+                // the block at all and need no extension to read.
+                try {
+                    $rowVersions = $this->rowVersions->explore($schema, $table);
+                } catch (InvalidArgumentException) {
+                    // The same missing relation the block lookup already reported.
+                }
+            } catch (QueryException $exception) {
+                // Deliberately overwriting anything the block lookup said. An
+                // unpopulated matview reports both "block 0 of 0" and "has not
+                // been populated", and only the second explains why.
+                $error = $this->databaseMessage($exception);
             }
         }
 
@@ -90,6 +105,19 @@ final readonly class InternalsController
             'capabilities' => $this->capabilities,
             'connection' => $this->connections->resolve()->getName() ?? 'unnamed',
         ]);
+    }
+
+    /**
+     * What PostgreSQL said, without the statement and bindings Laravel appends
+     * to a QueryException's message. The reader asked for a page, not for the
+     * SQL this package writes on their behalf, and the driver's own sentence is
+     * the part that tells them anything.
+     */
+    private function databaseMessage(QueryException $exception): string
+    {
+        $previous = $exception->getPrevious();
+
+        return $previous instanceof Throwable ? $previous->getMessage() : $exception->getMessage();
     }
 
     /**

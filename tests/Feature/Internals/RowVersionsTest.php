@@ -22,7 +22,7 @@ it('shows where each row version physically lives and which transaction made it'
     expect($versions)->toHaveCount(2)
         ->and($versions[0]->block)->toBe(0)
         ->and($versions[0]->xmin)->not->toBe('')
-        ->and($versions[0]->isCurrent)->toBeTrue();
+        ->and($versions[0]->untouched)->toBeTrue();
 });
 
 it('is available on any server, needing no extension at all', function (): void {

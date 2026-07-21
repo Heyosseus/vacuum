@@ -72,3 +72,75 @@ it('does not turn away the statements vacuum itself offers', function (): void {
 
     expect(true)->toBeTrue();
 });
+
+/**
+ * Every one of these was admitted before the guard checked the same string it
+ * executes and learned what a string literal is.
+ *
+ * The old readable() stripped comments with two regexes that knew nothing about
+ * quoting, so a literal containing -- or the block-comment opener deleted the rest
+ * of the statement *from the guard's view only*. The guard then saw `SELECT '`,
+ * reported an opener of SELECT, found no denylisted call, and admitted -- while
+ * the raw original, payload intact, went to PostgreSQL. Every entry on the
+ * denylist fell to that one trick.
+ *
+ * It remains a courtesy and not a boundary. But a control that fails silently is
+ * worse than one that is absent, and that is the part the disclaimer never
+ * covered.
+ */
+$hidden = [
+    'behind a line-comment marker in a literal' => "SELECT '--', pg_read_file('/etc/passwd')",
+    'behind a block-comment opener in a literal' => "SELECT '/*', pg_read_file('/etc/passwd'), '*/'",
+    'behind a dollar-quoted marker' => "SELECT \$\$--\$\$, pg_read_file('/etc/passwd')",
+    'behind a literal, opening a second backend' => "SELECT '--', dblink_exec('dbname=app', 'DELETE FROM users')",
+    'behind a literal, writing a server file' => "SELECT '--', lo_export(16384, '/tmp/pwned')",
+    'behind a doubled quote' => "SELECT 'it''s --', pg_ls_dir('/')",
+];
+
+it('refuses a denylisted call hidden inside a string literal', function (string $sql): void {
+    app(StatementGuard::class)->check($sql);
+})->with($hidden)->throws(RejectedStatement::class);
+
+it('refuses a denylisted call written as a quoted identifier', function (): void {
+    // Independent of the literal trick and needing no comment at all: PostgreSQL
+    // is perfectly happy with a quoted function name, and the old pattern
+    // demanded the parenthesis immediately after the bare one.
+    app(StatementGuard::class)->check('SELECT "pg_read_file"(\'/etc/passwd\')');
+})->throws(RejectedStatement::class);
+
+it('hands back the statement it approved, so nothing else can be run instead', function (): void {
+    // The structural half of the fix. Checking one string and executing another
+    // is the hole; returning the checked string is what closes the class of bug
+    // rather than the instances of it.
+    $checked = app(StatementGuard::class)->check("SELECT 1 -- and a comment\n");
+
+    expect($checked)->toBe('SELECT 1');
+});
+
+it('leaves a comment marker inside a literal in the statement it returns', function (): void {
+    // The literal is data. Stripping it would change what PostgreSQL is asked,
+    // which is the opposite failure and just as wrong.
+    expect(app(StatementGuard::class)->check("SELECT '--'"))->toBe("SELECT '--'");
+});
+
+it('still strips a comment that really is a comment', function (): void {
+    expect(app(StatementGuard::class)->check('SELECT 1 /* nested /* deeper */ still */ + 1'))
+        ->toBe('SELECT 1   + 1');
+});
+
+it('does not mistake an ordinary column name for a denylisted call', function (): void {
+    // A guard that cannot tell dblink_status from dblink( is a guard people
+    // switch off.
+    app(StatementGuard::class)->check('SELECT dblink_status FROM connections');
+})->throwsNoExceptions();
+
+it('does not run off the end of an unterminated literal or comment', function (string $sql): void {
+    // Half-typed SQL reaches the guard constantly -- somebody hits enter mid-edit.
+    // The scanner has to stop at the end of the string rather than reading past
+    // it, and PostgreSQL gets to be the one that complains about the syntax.
+    expect(app(StatementGuard::class)->check($sql))->not->toBe('');
+})->with([
+    'an unterminated dollar quote' => ['SELECT $tag$ still going'],
+    'an unterminated block comment' => ['SELECT 1 /* never closed'],
+    'an unterminated literal' => ["SELECT 'never closed"],
+]);

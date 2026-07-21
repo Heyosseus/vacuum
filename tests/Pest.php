@@ -105,6 +105,11 @@ function exerciseColumn(Filament\Tables\Columns\Column $column): void
  * A pg_settings row built for a test, without the ceremony of naming every column
  * a rule does not care about. Shared by every configuration-rule test rather than
  * declared once per file, since a global function can only be declared once.
+ *
+ * $value sets both the session value and the configured one, because that is the
+ * ordinary case and it keeps every existing caller reading the way it did. A test
+ * about the difference between the two -- which is the whole of C1 -- passes
+ * $runtimeValue to make them disagree, exactly as Vacuum's own SET LOCAL does.
  */
 function setting(
     string $name,
@@ -113,10 +118,12 @@ function setting(
     string $source = 'default',
     string $bootValue = '',
     bool $pendingRestart = false,
+    ?string $runtimeValue = null,
 ): Setting {
     return new Setting(
         name: $name,
-        value: $value,
+        value: $runtimeValue ?? $value,
+        resetValue: $value,
         unit: null,
         context: $context,
         source: $source,

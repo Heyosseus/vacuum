@@ -67,6 +67,9 @@ function indexStatistic(string $table, string $name, int $scans, bool $unique = 
         unique: $unique,
         primary: $primary,
         valid: true,
+        constraintOwned: false,
+        replicaIdentity: false,
+        partitionChild: false,
         countingSince: null,
     );
 }

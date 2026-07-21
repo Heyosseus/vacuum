@@ -16,12 +16,25 @@ namespace Heyosseus\Vacuum\Internals\Values;
  */
 final readonly class RowVersion
 {
+    /**
+     * @param  bool  $untouched  Whether nothing has written xmax on this version at
+     *                           all. Deliberately not called "current": a plain
+     *                           SELECT can read the system columns but not the
+     *                           infomask, and without the infomask there is no way
+     *                           to tell a row that was deleted from one that was
+     *                           merely locked, or one whose deleting transaction
+     *                           aborted. Both of the latter are current and both
+     *                           carry an xmax, so this column can honestly report
+     *                           that xmax is unset and must not claim more. The
+     *                           heap-page panel above, which does read the
+     *                           infomask, is where that question gets a real answer.
+     */
     public function __construct(
         public string $ctid,
         public int $block,
         public int $offset,
         public string $xmin,
         public string $xmax,
-        public bool $isCurrent,
+        public bool $untouched,
     ) {}
 }

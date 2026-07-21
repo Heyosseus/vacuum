@@ -32,6 +32,13 @@ final readonly class History
      */
     private const float FLAT_BAND = 0.01;
 
+    /**
+     * A fall of more than this share of the previous value is read as a reset --
+     * a freeze, a VACUUM FULL, a pg_repack -- rather than as movement, and the
+     * series is cut there before anything is fitted through it.
+     */
+    private const float RESET_DROP = 0.10;
+
     public function __construct(private Repository $config) {}
 
     public function enabled(): bool
@@ -75,8 +82,14 @@ final readonly class History
      * The cache-hit ratio over the last interval rather than over the life of the
      * server: the difference between the two db_cache snapshots, which is what the
      * database actually did between them. Null until two snapshots exist to subtract.
+     *
+     * The span the two snapshots actually cover comes back with it, because it is
+     * the caller's job to name the period it is describing and only this method
+     * knows what that period was.
+     *
+     * @return array{ratio: float, seconds: float}|null
      */
-    public function intervalCacheHitRatio(): ?float
+    public function intervalCacheHitRatio(): ?array
     {
         $rows = $this->recentRows(MetricKind::DbCache, 'database', 2);
 
@@ -96,7 +109,10 @@ final readonly class History
             return null;
         }
 
-        return $hit / $requested;
+        return [
+            'ratio' => $hit / $requested,
+            'seconds' => max($new['at'] - $old['at'], 0.0),
+        ];
     }
 
     /**
@@ -104,7 +120,12 @@ final readonly class History
      * added since the previous snapshot, and the mean of the two. Null until there
      * are two snapshots, or when the counters reset between them.
      *
-     * @return array{total_ms: float, calls: float, mean_ms: float}|null
+     * The interval here is the one that genuinely elapsed between the two rows,
+     * which for a statement is often not the snapshot cadence: only the fifty
+     * costliest statements are stored per snapshot, so a query that dropped out of
+     * that list and came back is being differenced across every snapshot it missed.
+     *
+     * @return array{total_ms: float, calls: float, mean_ms: float, seconds: float}|null
      */
     public function intervalStatementCost(string $queryId): ?array
     {
@@ -127,6 +148,7 @@ final readonly class History
             'total_ms' => $totalMs,
             'calls' => $calls,
             'mean_ms' => $totalMs / $calls,
+            'seconds' => max($new['at'] - $old['at'], 0.0),
         ];
     }
 
@@ -163,19 +185,25 @@ final readonly class History
     }
 
     /**
-     * When a monotonic metric is projected to cross a critical threshold, or null
+     * When a forecastable metric is projected to cross a critical threshold, or null
      * when it should not be projected: the wrong kind of metric, too few points, a
      * line that does not fit them, a flat or falling trend, or a value already past
      * the line. Silence is the correct output for every one of those.
+     *
+     * Only the climb since the last reset is fitted. These metrics fall back to
+     * nothing every time the maintenance they measure actually runs, and a line
+     * drawn across one of those falls describes no future the database has.
      */
     public function forecast(MetricKind $kind, string $object, float $threshold): ?Forecast
     {
-        if (! $kind->isMonotonic()) {
+        if (! $kind->isForecastable()) {
             return null;
         }
 
-        $series = $this->series($kind, $object);
+        $series = $this->finalSegment($this->series($kind, $object));
 
+        // Counted after the cut, not before: a long history whose last freeze was
+        // yesterday has one point to reason from, however many it has in total.
         if (count($series) < $this->minimumSnapshots()) {
             return null;
         }
@@ -296,9 +324,17 @@ final readonly class History
 
     /**
      * The most recent rows for a metric, newest first, with both values intact for
-     * the paired counters that need them.
+     * the paired counters that need them and the time each was taken.
      *
-     * @return list<array{value: float, value2: float}>
+     * taken_at comes back because the two most recent rows for a metric are not
+     * necessarily one interval apart. A snapshot stores only the fifty costliest
+     * statements and that ranking reshuffles constantly, so a query that fell out
+     * of the top fifty for four hours has its next appearance differenced against
+     * the one before it. The subtraction is still valid -- it is a difference of
+     * two counters -- but the span it covers is whatever it is, and the caller
+     * has to be told which so it can say so.
+     *
+     * @return list<array{value: float, value2: float, at: float}>
      */
     private function recentRows(MetricKind $kind, string $object, int $limit): array
     {
@@ -316,7 +352,7 @@ final readonly class History
             ->where('s.connection', $connection)
             ->orderByDesc('s.taken_at')
             ->limit($limit)
-            ->get(['m.value', 'm.value2']);
+            ->get(['m.value', 'm.value2', 's.taken_at']);
 
         $values = [];
 
@@ -324,10 +360,45 @@ final readonly class History
             $values[] = [
                 'value' => Cast::decimal($row->value),
                 'value2' => Cast::decimal($row->value2),
+                'at' => (float) (Cast::timestamp($row->taken_at)?->getTimestamp() ?? 0),
             ];
         }
 
         return $values;
+    }
+
+    /**
+     * The run of points since the metric last reset.
+     *
+     * A freeze takes age(relfrozenxid) back to nearly zero and a VACUUM FULL takes
+     * bloat with it, so the "monotonic" metrics are sawtooths and a single line
+     * through a whole retention window is a line through several unrelated climbs.
+     * The damage is not that the fit is poor -- a poor fit is refused by the r²
+     * floor and no harm done -- it is that a series with one early reset and a
+     * clean climb after it fits *well*, clears the floor, and reports a crossing
+     * date further away than the truth. Optimism is the one direction a wraparound
+     * forecast must not be wrong in.
+     *
+     * @param  list<array{0: float, 1: float}>  $series
+     * @return list<array{0: float, 1: float}>
+     */
+    private function finalSegment(array $series): array
+    {
+        $start = 0;
+        $counter = count($series);
+
+        for ($i = 1; $i < $counter; $i++) {
+            [, $previous] = $series[$i - 1];
+            [, $current] = $series[$i];
+
+            // A drop of any real size on a metric that only climbs is not noise,
+            // it is the maintenance that reset it.
+            if ($current < $previous * (1.0 - self::RESET_DROP)) {
+                $start = $i;
+            }
+        }
+
+        return array_slice($series, $start);
     }
 
     /**

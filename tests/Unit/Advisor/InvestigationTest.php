@@ -56,7 +56,7 @@ function investigations(): array
 
     $index = new IndexStatistic(
         schema: 'public', table: 'orders', name: 'orders_label_index', scans: 0,
-        bytes: 80 * 1024 * 1024, unique: false, primary: false, valid: false, countingSince: null,
+        bytes: 80 * 1024 * 1024, unique: false, primary: false, valid: false, constraintOwned: false, replicaIdentity: false, partitionChild: false, countingSince: null,
     );
 
     $blocked = new Session(
@@ -80,7 +80,7 @@ function investigations(): array
         )),
         'unused-index' => app(UnusedIndex::class)->inspect(new IndexStatistic(
             schema: 'public', table: 'orders', name: 'orders_label_index', scans: 0,
-            bytes: 80 * 1024 * 1024, unique: false, primary: false, valid: true, countingSince: null,
+            bytes: 80 * 1024 * 1024, unique: false, primary: false, valid: true, constraintOwned: false, replicaIdentity: false, partitionChild: false, countingSince: null,
         )),
         'invalid-index' => app(InvalidIndex::class)->inspect($index),
         'duplicate-index' => app(DuplicateIndex::class)->inspect(new IndexDuplicate(

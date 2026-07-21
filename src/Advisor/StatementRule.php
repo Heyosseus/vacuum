@@ -6,6 +6,12 @@ namespace Heyosseus\Vacuum\Advisor;
 
 use Heyosseus\Vacuum\Values\Statement;
 
+/**
+ * A question worth asking of a single statement shape. It answers with a Finding, or with null
+ * when it has nothing to say, which is the answer most of the time.
+ *
+ * @api Public API. Its shape is covered by the package version from 1.0 onward.
+ */
 interface StatementRule
 {
     public function inspect(Statement $statement): ?Finding;

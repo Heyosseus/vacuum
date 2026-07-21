@@ -24,6 +24,8 @@ final readonly class Finding
      *                              one. The subject is not enough to work it out: an index
      *                              finding's subject is the index, and public.orders_label_idx
      *                              is not a table anybody can open.
+     *
+     * @api Public API. Its shape is covered by the package version from 1.0 onward.
      */
     public function __construct(
         public string $rule,

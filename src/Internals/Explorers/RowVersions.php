@@ -77,10 +77,13 @@ final readonly class RowVersions implements Explorer
             xmin: Cast::text($row['xmin'] ?? null),
             xmax: $xmax,
 
-            // xmax is the transaction id PostgreSQL's own numbering starts
+            // xmax is a transaction id, and PostgreSQL's own numbering starts
             // counting at 3, so 0 is not simply falsy -- it is the specific
-            // sentinel meaning "nothing has ever superseded this version".
-            isCurrent: $xmax === '0',
+            // sentinel meaning nothing has written xmax here. That is all this
+            // can say: a non-zero xmax may be a deleter, a locker, or an
+            // aborted transaction, and telling them apart needs the infomask,
+            // which no amount of selecting system columns will hand over.
+            untouched: $xmax === '0',
         );
     }
 }

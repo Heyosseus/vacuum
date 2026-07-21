@@ -15,6 +15,8 @@ use Heyosseus\Vacuum\Values\Settings;
  * contract exists for settings nothing else reads yet -- the full context,
  * source and pending_restart columns a configuration audit needs and a
  * capability probe has no reason to ask for.
+ *
+ * @api Public API. Its shape is covered by the package version from 1.0 onward.
  */
 interface ConfigurationRule
 {

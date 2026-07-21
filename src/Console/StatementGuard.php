@@ -69,9 +69,18 @@ final readonly class StatementGuard
     public function __construct(private Repository $config) {}
 
     /**
+     * The statement, normalized, once it has passed every check here.
+     *
+     * It returns the string rather than nothing so that the caller executes the
+     * *same* text this examined. Checking one string and running another is how a
+     * guard comes to admit `SELECT '--', pg_read_file('/etc/passwd')`: the copy
+     * being inspected had everything after the literal stripped out of it as a
+     * comment, and the copy being executed did not. Whatever this method decided
+     * about is what PostgreSQL is then given.
+     *
      * @throws RejectedStatement
      */
-    public function check(string $statement): void
+    public function check(string $statement): string
     {
         $sql = $this->readable($statement);
 
@@ -98,21 +107,28 @@ final readonly class StatementGuard
         if ($escape !== null) {
             throw RejectedStatement::reachesOutside($escape);
         }
+
+        return $sql;
     }
 
     /**
      * The first denylisted function the statement calls, if it calls one.
      *
-     * Matched as a call — the name, then optional whitespace, then an opening
-     * parenthesis — and bounded at the front so it is a whole name rather than a
-     * substring. A column called dblink_status is somebody's ordinary schema and
-     * not an attempt at anything, and a guard that cannot tell the difference is a
-     * guard people switch off.
+     * Matched as a call — the name, optionally quoted, then optional whitespace,
+     * then an opening parenthesis — and bounded at the front so it is a whole name
+     * rather than a substring. A column called dblink_status is somebody's ordinary
+     * schema and not an attempt at anything, and a guard that cannot tell the
+     * difference is a guard people switch off.
+     *
+     * The optional quotes are not decoration. PostgreSQL is perfectly happy with
+     * SELECT "pg_read_file"('/etc/passwd'), which is the same call with a quoted
+     * identifier, and a pattern that demands the parenthesis immediately after the
+     * bare name does not see it at all.
      */
     private function escape(string $sql): ?string
     {
         foreach (self::ESCAPES as $function) {
-            if (preg_match('/(?<![a-z0-9_])'.preg_quote($function, '/').'\s*\(/i', $sql) === 1) {
+            if (preg_match('/(?<![a-z0-9_])"?'.preg_quote($function, '/').'"?\s*\(/i', $sql) === 1) {
                 return $function;
             }
         }
@@ -123,14 +139,158 @@ final readonly class StatementGuard
     /**
      * The statement as PostgreSQL would read it: comments are not instructions, and
      * a DELETE hiding behind "-- SELECT 1" is the oldest trick there is.
+     *
+     * Scanned rather than regex-replaced, because a comment is only a comment
+     * outside a string. A pattern that deletes from a double hyphen to the end of
+     * the line deletes the whole of SELECT '--', pg_read_file('/etc/passwd') after
+     * the two characters inside the literal -- the entire payload -- while
+     * PostgreSQL, which knows those two characters are a string, runs every bit of
+     * it. The same holds for a block-comment opener inside a literal, and for
+     * dollar-quoted bodies, where a comment marker is just text.
+     *
+     * So literals are copied through untouched and only comments between them are
+     * removed. Both quote styles allow their delimiter to be doubled to escape it,
+     * and block comments nest, and both of those are handled where they are read.
      */
     private function readable(string $statement): string
     {
-        $sql = (string) preg_replace('/--[^\n]*/', ' ', $statement);
-        $sql = (string) preg_replace('#/\*.*?\*/#s', ' ', $sql);
+        $sql = '';
+        $length = strlen($statement);
+        $position = 0;
+
+        while ($position < $length) {
+            $character = $statement[$position];
+
+            if ($character === '$'
+                && preg_match('/\G(\$[a-zA-Z_]\w*\$|\$\$)/', $statement, $matches, 0, $position) === 1
+            ) {
+                $end = $this->closingTag($statement, $position, $matches[1]);
+                $sql .= substr($statement, $position, $end - $position);
+                $position = $end;
+
+                continue;
+            }
+
+            if ($character === "'" || $character === '"') {
+                $end = $this->closingQuote($statement, $position, $character);
+                $sql .= substr($statement, $position, $end - $position);
+                $position = $end;
+
+                continue;
+            }
+
+            if ($this->at($statement, $position, '--')) {
+                $newline = strpos($statement, "\n", $position);
+                $position = $newline === false ? $length : $newline;
+                $sql .= ' ';
+
+                continue;
+            }
+
+            if ($this->at($statement, $position, '/*')) {
+                $position = $this->closingBlockComment($statement, $position);
+                $sql .= ' ';
+
+                continue;
+            }
+
+            $sql .= $character;
+            $position++;
+        }
 
         // Everybody types the trailing semicolon; nobody means a second statement by it.
         return trim(rtrim(trim($sql), ';'));
+    }
+
+    /**
+     * Where a quoted literal or identifier ends. A doubled delimiter is an escaped
+     * one and not the end; an unterminated literal runs to the end of the string,
+     * which PostgreSQL will reject on its own terms in a moment.
+     */
+    private function closingQuote(string $statement, int $start, string $quote): int
+    {
+        $length = strlen($statement);
+        $position = $start + 1;
+
+        while ($position < $length) {
+            if ($statement[$position] !== $quote) {
+                $position++;
+
+                continue;
+            }
+
+            if ($position + 1 < $length && $statement[$position + 1] === $quote) {
+                $position += 2;
+
+                continue;
+            }
+
+            return $position + 1;
+        }
+
+        return $length;
+    }
+
+    /**
+     * Where a dollar-quoted body ends: at the next occurrence of its own opening
+     * tag, which is the whole point of the syntax.
+     */
+    private function closingTag(string $statement, int $start, string $tag): int
+    {
+        $end = strpos($statement, $tag, $start + strlen($tag));
+
+        return $end === false ? strlen($statement) : $end + strlen($tag);
+    }
+
+    /**
+     * Where a block comment ends.
+     *
+     * Counting depth rather than looking for the first closing marker, because
+     * PostgreSQL's block comments nest: an inner opener has to be closed before
+     * the outer one is, and a scanner that stops at the first close leaves the
+     * remainder of an outer comment in the statement it hands on.
+     */
+    private function closingBlockComment(string $statement, int $start): int
+    {
+        $length = strlen($statement);
+        $depth = 0;
+        $position = $start;
+
+        while ($position < $length) {
+            if ($this->at($statement, $position, '/*')) {
+                $depth++;
+                $position += 2;
+
+                continue;
+            }
+
+            if ($this->at($statement, $position, '*/')) {
+                $depth--;
+                $position += 2;
+
+                if ($depth === 0) {
+                    return $position;
+                }
+
+                continue;
+            }
+
+            $position++;
+        }
+
+        return $length;
+    }
+
+    /**
+     * Whether the statement carries this two-character marker at this offset,
+     * without copying the rest of the string to find out. Every marker the scanner
+     * looks for is two characters, and comparing them directly keeps the scan
+     * linear over a statement rather than quadratic.
+     */
+    private function at(string $statement, int $position, string $marker): bool
+    {
+        return ($statement[$position] ?? '') === $marker[0]
+            && ($statement[$position + 1] ?? '') === $marker[1];
     }
 
     private function isAnalyze(string $sql): bool

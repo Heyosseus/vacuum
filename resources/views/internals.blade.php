@@ -94,6 +94,18 @@
                     </p>
                 </div>
             </section>
+        @elseif ($page !== null && ! $page->isHeapLayout())
+            <section class="panel">
+                <div class="panel__bar"><span>Not a heap page</span></div>
+                <div class="panel__body">
+                    <p>
+                        Block {{ $page->block }} reserves a special area, which a heap page never does. It
+                        belongs to an index or another access method, and the tuple decoding below would
+                        read its bytes as though they were rows -- producing a confident answer made of
+                        nothing rather than an error. So nothing is shown.
+                    </p>
+                </div>
+            </section>
         @elseif ($page !== null)
             @php
                 $pointerBytes = $page->lower;
@@ -138,10 +150,15 @@
 
                 <div class="panel__body">
                     <p class="aside">
-                        <code>xmax = 0</code> means nothing has superseded this row version. A non-zero
-                        <code>xmax</code> is a row version PostgreSQL is keeping until every transaction
-                        that might still need it has finished -- which is what a dead tuple is, and why
-                        <code>VACUUM</code> exists.
+                        <code>xmax = 0</code> means nothing has touched this row version since it was
+                        written. A non-zero <code>xmax</code> does <em>not</em> on its own mean the row
+                        is dead: PostgreSQL writes <code>xmax</code> for a lock as well as for a delete,
+                        so a row somebody is holding with <code>SELECT ... FOR UPDATE</code> carries one
+                        and is entirely current, and a row whose deleting transaction rolled back keeps
+                        the <code>xmax</code> that never took effect. The <code>locked only</code> and
+                        <code>xmax invalid</code> flags are what tell those apart, and only the rows
+                        highlighted below are ones a later version has genuinely replaced -- the row
+                        versions <code>VACUUM</code> exists to reclaim.
                     </p>
                 </div>
 
@@ -163,7 +180,7 @@
                                     <td>{{ $pointer->offset }}</td>
                                     <td>{{ $pointer->length }}</td>
                                     <td>{{ $pointer->xmin ?? '—' }}</td>
-                                    <td class="@if ($pointer->state === 'normal' && $pointer->xmax !== null && $pointer->xmax !== '0') lp__xmax--superseded @endif">
+                                    <td class="@if ($pointer->state === 'normal' && $pointer->isSuperseded()) lp__xmax--superseded @endif">
                                         {{ $pointer->xmax ?? '—' }}
                                     </td>
                                     <td>{{ $pointer->ctid ?? '—' }}</td>
@@ -186,9 +203,11 @@
                     @if ($chains === [])
                         <p>No HOT chains on this page.</p>
                         <p class="note">
-                            Either nothing here has been updated since the last vacuum, or every update
-                            found no room in the page or touched an indexed column, so it rewrote every
-                            index instead of chaining in place.
+                            Nothing on this page has been updated in place. Either nothing here has been
+                            updated at all, or every update found no room left in the page or touched an
+                            indexed column -- and an update that cannot go HOT writes the new version
+                            elsewhere and rewrites every index to point at it, which is the cost
+                            <code>fillfactor</code> exists to avoid.
                         </p>
                     @else
                         @foreach ($chains as $chain)
@@ -232,7 +251,7 @@
             @else
                 <div class="scroll">
                     <table>
-                        <thead><tr><th>ctid</th><th>block</th><th>offset</th><th>xmin</th><th>xmax</th><th>current</th></tr></thead>
+                        <thead><tr><th>ctid</th><th>block</th><th>offset</th><th>xmin</th><th>xmax</th><th>xmax unset</th></tr></thead>
                         <tbody>
                             @foreach ($rowVersions as $version)
                                 <tr>
@@ -241,7 +260,7 @@
                                     <td>{{ $version->offset }}</td>
                                     <td>{{ $version->xmin }}</td>
                                     <td>{{ $version->xmax }}</td>
-                                    <td>{{ $version->isCurrent ? 'yes' : '—' }}</td>
+                                    <td>{{ $version->untouched ? 'yes' : '—' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

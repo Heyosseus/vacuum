@@ -73,3 +73,58 @@ it('leaves out the schemas the configuration ignores', function (): void {
 
     expect($schemas)->not->toContain('pg_catalog');
 });
+
+it('marks an exclusion constraint\'s index as one the database is enforcing', function (): void {
+    // The whole of H5 in one relation. An exclusion constraint is backed by an
+    // index that is neither unique nor primary, so constrains() -- which was
+    // exactly indisprimary || indisunique -- said it was an ordinary index. An
+    // unused one is then offered up with DROP INDEX CONCURRENTLY, and PostgreSQL
+    // refuses: "cannot drop index ... because constraint ... requires it". The
+    // flagship remediation failing in the reader's hands is worse than no advice.
+    DB::statement('CREATE EXTENSION IF NOT EXISTS btree_gist');
+    DB::statement('DROP TABLE IF EXISTS bookings');
+    DB::statement('CREATE TABLE bookings (id serial PRIMARY KEY, room int, during tstzrange)');
+    DB::statement('ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap '
+        .'EXCLUDE USING gist (room WITH =, during WITH &&)');
+    flushStatistics();
+
+    $index = index('bookings_no_overlap');
+
+    expect($index)->not->toBeNull()
+        ->and($index->unique)->toBeFalse()
+        ->and($index->primary)->toBeFalse()
+        ->and($index->constraintOwned)->toBeTrue()
+        ->and($index->constrains())->toBeTrue();
+
+    DB::statement('DROP TABLE IF EXISTS bookings');
+})->skip(fn (): bool => ! DB::table('pg_available_extensions')->where('name', 'btree_gist')->exists(),
+    'btree_gist is not available on this server');
+
+it('reports an ordinary index as neither constraint-owned nor a partition child', function (): void {
+    $index = index('pallets_label_index');
+
+    expect($index)->not->toBeNull()
+        ->and($index->constraintOwned)->toBeFalse()
+        ->and($index->replicaIdentity)->toBeFalse()
+        ->and($index->partitionChild)->toBeFalse()
+        ->and($index->constrains())->toBeFalse();
+});
+
+it('marks an index attached to a partitioned index as one that cannot be dropped alone', function (): void {
+    // A partition's index belongs to its parent: DROP INDEX on the child is
+    // refused, and the advice has to know that before it offers one.
+    DB::statement('DROP TABLE IF EXISTS crates');
+    DB::statement('CREATE TABLE crates (id int, region text) PARTITION BY LIST (region)');
+    DB::statement("CREATE TABLE crates_north PARTITION OF crates FOR VALUES IN ('north')");
+    DB::statement('CREATE INDEX crates_region_index ON crates (region)');
+    flushStatistics();
+
+    $child = collect(app(IndexStatistics::class)->all())
+        ->first(fn (IndexStatistic $index): bool => str_starts_with($index->name, 'crates_north_'));
+
+    expect($child)->not->toBeNull()
+        ->and($child->partitionChild)->toBeTrue()
+        ->and($child->constrains())->toBeTrue();
+
+    DB::statement('DROP TABLE IF EXISTS crates');
+});

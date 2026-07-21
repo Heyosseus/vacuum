@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Vacuum\History;
 
 use Heyosseus\Vacuum\Advisor\Finding;
+use Heyosseus\Vacuum\Support\Elapsed;
 use Illuminate\Contracts\Config\Repository;
 
 /**
@@ -47,7 +48,7 @@ final readonly class FindingPresenter
             ? Trend::Unknown
             : $this->history->direction($kind, $finding->table);
 
-        $forecast = $kind instanceof MetricKind && $finding->table !== null && $kind->isMonotonic()
+        $forecast = $kind instanceof MetricKind && $finding->table !== null && $kind->isForecastable()
             ? $this->history->forecast($kind, $finding->table, $this->threshold($kind))
             : null;
 
@@ -80,16 +81,17 @@ final readonly class FindingPresenter
 
     private function cacheIntervalSummary(): ?string
     {
-        $ratio = $this->history->intervalCacheHitRatio();
+        $interval = $this->history->intervalCacheHitRatio();
 
-        if ($ratio === null) {
+        if ($interval === null) {
             return null;
         }
 
-        $measured = number_format($ratio * 100, 1).'%';
+        $measured = number_format($interval['ratio'] * 100, 1).'%';
         $target = number_format($this->number('vacuum.thresholds.cache_hit_ratio', 0.99) * 100, 1).'%';
+        $over = $this->span($interval['seconds']);
 
-        return "{$measured} of block reads were served from memory over the last interval, against a target of {$target}.";
+        return "{$measured} of block reads were served from memory {$over}, against a target of {$target}.";
     }
 
     private function statementIntervalSummary(Finding $finding): ?string
@@ -106,8 +108,24 @@ final readonly class FindingPresenter
 
         $mean = number_format($cost['mean_ms']);
         $calls = number_format($cost['calls']);
+        $over = $this->span($cost['seconds']);
 
-        return "Averaged {$mean} ms across {$calls} calls over the last interval.";
+        return "Averaged {$mean} ms across {$calls} calls {$over}.";
+    }
+
+    /**
+     * How to name the period a measurement covers.
+     *
+     * "Over the last interval" was the old wording for both of these, and it was a
+     * guess dressed as a fact: the two rows being differenced are the two most
+     * recent for that metric, not necessarily two consecutive snapshots. Naming
+     * the span that actually elapsed costs nothing and cannot be wrong.
+     */
+    private function span(float $seconds): string
+    {
+        return $seconds > 0.0
+            ? 'over the last '.Elapsed::human($seconds)
+            : 'over the last interval';
     }
 
     private function number(string $key, float|int $default): float

@@ -17,6 +17,9 @@ function halfBuilt(bool $valid, int $bytes = 40 * 1024 * 1024, string $name = 'p
         unique: false,
         primary: false,
         valid: $valid,
+        constraintOwned: false,
+        replicaIdentity: false,
+        partitionChild: false,
         countingSince: null,
     );
 }
