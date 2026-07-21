@@ -2,6 +2,8 @@
 
 [![Latest Version](https://img.shields.io/packagist/v/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
 [![Total Downloads](https://img.shields.io/packagist/dt/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
+[![Tests](https://img.shields.io/github/actions/workflow/status/Heyosseus/vacuum/tests.yml?branch=main&label=tests)](https://github.com/Heyosseus/vacuum/actions/workflows/tests.yml)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/Heyosseus/vacuum/actions/workflows/tests.yml)
 [![License](https://img.shields.io/packagist/l/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
 
 **A PostgreSQL monitoring and tuning dashboard for Laravel.**
@@ -12,7 +14,7 @@ It shows you that statement. It never runs it.
 
 ![Vacuum's standalone dashboard: the health grade and the findings that produced it](art/blade-overview.png)
 
-> **Status: 0.6.0** — an early release. The `0.x` line follows semantic versioning, which means the surface may still shift between minor versions.
+> **Status: 1.0.0.** The public API is frozen — see [What semver covers](#what-semver-covers). A breaking change to the rule contracts, `Finding`, the value objects, the configuration keys or the `--format=json` document now requires a major version.
 
 ## What it tells you
 
@@ -204,7 +206,9 @@ Two things worth knowing. It **never writes** — the remediation is printed for
 
 ## History over time
 
-Vacuum is point-in-time by default: every page and every `vacuum:check` reads the database as it is this instant. Switch history on and it records a snapshot on a schedule, so it can tell you which way a number is *moving* — bloat that is growing, a freeze age that climbs and never resets, a cache-hit ratio measured over the last hour rather than over the life of the server.
+Vacuum is point-in-time by default: every page and every `vacuum:check` reads the database as it is this instant. Switch history on and it records a snapshot on a schedule, so it can tell you which way a number is *moving* — bloat that is growing, a freeze age climbing since the last time anything froze it, a cache-hit ratio measured over the last hour rather than over the life of the server.
+
+A forecast is drawn only through the climb since the most recent reset. Both of the numbers worth projecting are sawtooths — `age(relfrozenxid)` falls to nearly nothing every time a table is frozen, bloat falls on every `VACUUM FULL` — and a line fitted across one of those falls describes a future the database does not have. The one direction a wraparound forecast must not err in is the optimistic one.
 
 ```env
 VACUUM_HISTORY_ENABLED=true
@@ -350,6 +354,26 @@ php artisan vendor:publish --tag=vacuum-views
 ```
 
 The stylesheet is inlined rather than fetched from a CDN, on the grounds that the dashboard is what you open when the database is unwell, sometimes from a machine that cannot reach the internet.
+
+## What semver covers
+
+From 1.0, these are public API and a breaking change to any of them requires a major version:
+
+- **The rule contracts** — `TableRule`, `IndexRule`, `SessionRule`, `StatementRule`, `BloatRule`, `CacheRule`, `DuplicateRule`, `ConfigurationRule`, `SettingRule` — and the `Inspection` contract behind them.
+- **`Finding`, `Severity` and `Grade`**, including `Finding`'s constructor signature. A custom rule constructs one, so its parameters are as public as the interface that returns it.
+- **The value objects the contracts hand a rule**: `TableStatistic`, `IndexStatistic`, `Session`, `Statement`, `CacheStatistic`, `Settings` and `Capabilities`.
+- **Configuration keys** under `vacuum.*`, and the `VACUUM_*` environment variables that feed them. Keys may be added; existing ones will not change meaning.
+- **The `vacuum:check --format=json` document**, which is what a pipeline parses.
+- **Route names** (`vacuum.dashboard` and the rest) and the `Vacuum::auth()` gate.
+
+Explicitly **not** covered, and free to change in a minor release:
+
+- The SQL files under `resources/sql`. They are readable on purpose and they are not an interface — a catalog query is rewritten whenever PostgreSQL gives a better way to ask.
+- The Blade views. Publishing them is supported; the markup inside them is not frozen.
+- Everything under `Internals` and `Learn`. Both are teaching surfaces, and pinning their shape would freeze the explanation as well as the code.
+- Anything marked `@internal`.
+
+Vacuum supports the PostgreSQL major versions the PostgreSQL project still supports, and CI runs the suite against each of them. A major going end-of-life is a minor release here, not a major one.
 
 ## Development
 

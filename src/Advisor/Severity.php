@@ -41,6 +41,8 @@ enum Severity: string
      *
      * An Info finding costs nothing: it is a fact, not a fault, and a server
      * should not be marked down for telling you the truth about what it cannot see.
+     *
+     * @api Public API. Its shape is covered by the package version from 1.0 onward.
      */
     public function weight(): int
     {

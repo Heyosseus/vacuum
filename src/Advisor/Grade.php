@@ -26,6 +26,8 @@ enum Grade: string
     /**
      * This grade, or the ceiling if this grade is better than it. A ceiling can
      * only ever push a grade down: it never rescues a failing one.
+     *
+     * @api Public API. Its shape is covered by the package version from 1.0 onward.
      */
     public function noBetterThan(self $ceiling): self
     {

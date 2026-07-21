@@ -12,6 +12,8 @@ use Heyosseus\Vacuum\Values\BloatEstimate;
  * A separate interface from TableRule on purpose: a rule should be handed the one
  * thing it reasons about, so that adding a rule never widens what has to be
  * queried before it can run.
+ *
+ * @api Public API. Its shape is covered by the package version from 1.0 onward.
  */
 interface BloatRule
 {

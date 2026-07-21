@@ -17,6 +17,8 @@ interface Inspection
 {
     /**
      * @return list<Finding>
+     *
+     * @api Public API. Its shape is covered by the package version from 1.0 onward.
      */
     public function findings(): array;
 }

@@ -10,6 +10,8 @@ use Heyosseus\Vacuum\Values\TableStatistic;
  * A question worth asking of a single table. It answers with a Finding, or with
  * null when it has nothing to say — which is the answer for most tables, most
  * of the time.
+ *
+ * @api Public API. Its shape is covered by the package version from 1.0 onward.
  */
 interface TableRule
 {
