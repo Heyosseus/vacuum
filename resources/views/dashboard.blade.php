@@ -2,7 +2,7 @@
 
 @section('content')
     @php
-        $counts = ['critical' => 0, 'warning' => 0, 'info' => 0];
+        $counts = ['critical' => 0, 'warning' => 0, 'info' => 0, 'unknown' => 0];
         $worst = [];
 
         foreach ($findings as $finding) {
