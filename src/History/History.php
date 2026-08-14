@@ -247,11 +247,11 @@ final readonly class History
     {
         [$latest, $previous] = $this->latestTwo();
 
-        if ($latest === null) {
+        if (! $latest instanceof Snapshot) {
             return [];
         }
 
-        if ($previous === null) {
+        if (! $previous instanceof Snapshot) {
             return array_values($latest->findings->all());
         }
 
@@ -272,7 +272,7 @@ final readonly class History
     {
         [$latest, $previous] = $this->latestTwo();
 
-        if ($latest === null || $previous === null) {
+        if (! $latest instanceof Snapshot || ! $previous instanceof Snapshot) {
             return [];
         }
 
