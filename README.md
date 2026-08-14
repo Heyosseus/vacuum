@@ -6,15 +6,45 @@
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/Heyosseus/vacuum/actions/workflows/tests.yml)
 [![License](https://img.shields.io/packagist/l/heyosseus/vacuum.svg)](https://packagist.org/packages/heyosseus/vacuum)
 
+![PHP](https://img.shields.io/badge/php-8.3%2B-777BB4?logo=php&logoColor=white)
+![Laravel](https://img.shields.io/badge/laravel-11%20%7C%2012%20%7C%2013-FF2D20?logo=laravel&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/postgresql-14%2B-4169E1?logo=postgresql&logoColor=white)
+
+![Vacuum — a PostgreSQL monitoring and tuning dashboard for Laravel](art/hero.png)
+
 **A PostgreSQL monitoring and tuning dashboard for Laravel.**
 
 Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_stat_activity`, `pg_stat_database`, `pg_stat_statements`, `pg_class` — and turns it into a page that says what is wrong, what it is costing you, and the statement that would put it right.
 
 It shows you that statement. It never runs it.
 
-![Vacuum's standalone dashboard: the health grade and the findings that produced it](art/blade-overview.png)
-
 > **Status: 1.0.0.** The public API is frozen — see [What semver covers](#what-semver-covers). A breaking change to the rule contracts, `Finding`, the value objects, the configuration keys or the `--format=json` document now requires a major version.
+
+## Quick start
+
+```bash
+composer require heyosseus/vacuum
+php artisan vacuum:install
+```
+
+Then open `/vacuum`. That is all of it: the installer publishes the config and asks one question, and everything Vacuum reads is already being kept by the server.
+
+![How Vacuum works: six catalogs PostgreSQL maintains, thirteen rules, and a finding carrying the statement that fixes it](art/how-it-works.png)
+
+Already running a Filament panel? `php artisan vacuum:install --filament` puts the same data inside it — see [Inside Filament](#inside-filament). Want it in CI instead of in a browser? `php artisan vacuum:check` — see [In your pipeline](#in-your-pipeline).
+
+## Contents
+
+- [What it tells you](#what-it-tells-you) — the thirteen rules, and the score they produce
+- [Learn](#learn) — thirteen lessons worked through your own tables
+- [Requirements](#requirements) · [Installation](#installation)
+- [The standalone dashboard](#the-standalone-dashboard) · [Inside Filament](#inside-filament)
+- [Who may look](#who-may-look) · [Which database](#which-database)
+- [In your pipeline](#in-your-pipeline) — `vacuum:check`, and failing a build
+- [History over time](#history-over-time) — direction, forecasts, and what changed
+- [The SQL console](#the-sql-console) — and what actually makes it safe
+- [Tuning the thresholds](#tuning-the-thresholds) · [Writing your own rule](#writing-your-own-rule) · [Restyling the dashboard](#restyling-the-dashboard)
+- [What semver covers](#what-semver-covers) · [Development](#development)
 
 ## What it tells you
 
@@ -35,6 +65,8 @@ It shows you that statement. It never runs it.
 | `slow-statement` | The shapes of query that cost the most per run |
 
 Every finding carries a severity, what the problem costs you, and — where a single statement would fix it — the SQL to run. Findings roll up into a health score out of 100, which is computed *from the findings themselves*, so the grade can never disagree with the list beneath it.
+
+![The score: 100, minus 25 for unused-index and 15 for cache-hit-ratio, leaves 60 and a grade of D](art/scoring.png)
 
 Most of those rules describe a database that is slower than it could be. `wraparound` describes one that **stops**: PostgreSQL counts transactions in 32 bits, and a table nothing freezes drags the whole cluster toward the end of that count, at which point the server refuses every write until it is shut down and vacuumed in single-user mode. It gives no warning of its own, and it does not slow down first.
 
@@ -93,13 +125,13 @@ php artisan vacuum:install
 
 ### The standalone dashboard
 
-Open any table to see its full profile — size, dead rows, freeze age, how it is read and written, and the findings against it — worst first, each with the statement that would fix it.
+The health grade, and the findings that produced it — worst first, each with the statement that would put it right.
 
-![A single table's profile in the standalone dashboard](art/blade-table.png)
+![Vacuum's standalone dashboard: the health grade and the findings that produced it](art/blade-overview.png)
 
-The built-in SQL console runs every statement inside a read-only transaction that is always rolled back.
+Open any table to see its full profile — size, dead rows, freeze age, how it is read and written, and the findings against it, again worst first.
 
-![The read-only SQL console](art/blade-console.png)
+The built-in SQL console runs every statement inside a read-only transaction that is always rolled back. See [The SQL console](#the-sql-console).
 
 ## Inside Filament
 
@@ -141,13 +173,7 @@ Every surface asks that one `Vacuum::auth()` callback, and every one opts out of
 
 ![The Overview page inside a Filament panel: health, database vitals, and charts](art/filament-overview.png)
 
-![The findings, worst first, each with the statement that would fix it](art/filament-findings.png)
-
-The read-only resources over `pg_stat_user_indexes` and `pg_stat_statements` come with native Filament sort, search, filter and pagination.
-
-![The Indexes resource](art/filament-indexes.png)
-
-![The Statements resource](art/filament-statements.png)
+Beneath those charts sit the findings themselves, worst first, each with the statement that would fix it. The read-only resources over `pg_stat_user_indexes`, `pg_stat_activity` and `pg_stat_statements` come with native Filament sort, search, filter and pagination.
 
 > **The SQL console stays on the Blade UI for now.** It is not yet a Filament page, and `VACUUM_UI=filament` stands the standalone routes down, so if you rely on the console keep the Blade UI until a later release brings it inside the panel.
 
@@ -249,6 +275,8 @@ VACUUM_CONSOLE_ENABLED=true
 ```
 
 Statements run inside a transaction PostgreSQL has been told is `READ ONLY`, with a `statement_timeout`, and the transaction is always rolled back.
+
+![Three layers: the keyword check is a courtesy, the read-only transaction is what PostgreSQL enforces, and the role it connects as is what actually bounds it](art/safety.png)
 
 **The keyword check is not what makes this safe.** Vacuum turns away statements that do not begin with a word that reads, but that is a courtesy for people who type `DELETE` by accident. It is not a defence, and it cannot be one:
 
