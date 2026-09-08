@@ -26,9 +26,9 @@ function twoTables(): Schemas
 
 function ruleFinding(int $count): SchemaRule
 {
-    return new class($count) implements SchemaRule
+    return new readonly class($count) implements SchemaRule
     {
-        public function __construct(private readonly int $count) {}
+        public function __construct(private int $count) {}
 
         public function inspect(TableSchema $table): array
         {
