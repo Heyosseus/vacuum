@@ -17,6 +17,7 @@ use Heyosseus\Vacuum\Advisor\Inspections\CacheInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\ConfigurationInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\DuplicateInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\IndexInspection;
+use Heyosseus\Vacuum\Advisor\Inspections\SchemaInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SessionInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\SettingInspection;
 use Heyosseus\Vacuum\Advisor\Inspections\StatementInspection;
@@ -28,25 +29,34 @@ use Heyosseus\Vacuum\Advisor\Rules\CacheHitRatio;
 use Heyosseus\Vacuum\Advisor\Rules\DeadTuples;
 use Heyosseus\Vacuum\Advisor\Rules\DuplicateIndex;
 use Heyosseus\Vacuum\Advisor\Rules\EndOfLifeMajor;
+use Heyosseus\Vacuum\Advisor\Rules\ForeignKeyTypeMismatch;
 use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
+use Heyosseus\Vacuum\Advisor\Rules\Int4PrimaryKey;
 use Heyosseus\Vacuum\Advisor\Rules\InvalidIndex;
 use Heyosseus\Vacuum\Advisor\Rules\IoTimingOff;
+use Heyosseus\Vacuum\Advisor\Rules\JsonNotJsonb;
 use Heyosseus\Vacuum\Advisor\Rules\LockTimeoutIneffective;
+use Heyosseus\Vacuum\Advisor\Rules\MissingPrimaryKey;
 use Heyosseus\Vacuum\Advisor\Rules\MultixactWraparound;
 use Heyosseus\Vacuum\Advisor\Rules\PendingRestart;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
 use Heyosseus\Vacuum\Advisor\Rules\StaleStatistics;
 use Heyosseus\Vacuum\Advisor\Rules\TableBloat;
 use Heyosseus\Vacuum\Advisor\Rules\TimeoutsUnset;
+use Heyosseus\Vacuum\Advisor\Rules\UnindexedForeignKey;
+use Heyosseus\Vacuum\Advisor\Rules\UnindexedMorphs;
 use Heyosseus\Vacuum\Advisor\Rules\UnpatchedServer;
 use Heyosseus\Vacuum\Advisor\Rules\UnusedIndex;
 use Heyosseus\Vacuum\Advisor\Rules\Wraparound;
+use Heyosseus\Vacuum\Advisor\SchemaAdvisor;
+use Heyosseus\Vacuum\Advisor\SchemaRule;
 use Heyosseus\Vacuum\Advisor\SessionRule;
 use Heyosseus\Vacuum\Advisor\SettingRule;
 use Heyosseus\Vacuum\Advisor\StatementRule;
 use Heyosseus\Vacuum\Advisor\TableRule;
 use Heyosseus\Vacuum\Console\Commands\CheckCommand;
 use Heyosseus\Vacuum\Console\Commands\InstallCommand;
+use Heyosseus\Vacuum\Console\Commands\LintCommand;
 use Heyosseus\Vacuum\Console\Commands\SnapshotCommand;
 use Heyosseus\Vacuum\Filament\Install\PhpLintChecker;
 use Heyosseus\Vacuum\Filament\Install\SyntaxChecker;
@@ -76,6 +86,7 @@ use Heyosseus\Vacuum\Queries\ServerCapabilities;
 use Heyosseus\Vacuum\Queries\ServerSettings;
 use Heyosseus\Vacuum\Queries\Sessions;
 use Heyosseus\Vacuum\Queries\Statements;
+use Heyosseus\Vacuum\Queries\TableSchemas;
 use Heyosseus\Vacuum\Queries\TableStatistics;
 use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\Capabilities;
@@ -118,6 +129,12 @@ final class VacuumServiceProvider extends ServiceProvider
     /** A whole subject of its own: a query paired with the rules that judge it. */
     public const string INSPECTIONS = 'vacuum.inspections';
 
+    /** Rules that judge the shape of a table rather than its statistics. */
+    public const string SCHEMA_RULES = 'vacuum.schema-rules';
+
+    /** Inspections the schema advisor merges, kept apart from the main advisor's. */
+    public const string SCHEMA_INSPECTIONS = 'vacuum.schema-inspections';
+
     /** Tag a Lesson with this to have it appear in the Learn curriculum. */
     public const string LESSONS = 'vacuum.lessons';
 
@@ -132,6 +149,9 @@ final class VacuumServiceProvider extends ServiceProvider
      * @var list<class-string<Inspection>>
      */
     private array $inspections = [];
+
+    /** @var list<class-string<Inspection>> */
+    private array $schemaInspections = [];
 
     /**
      * Register the package's services into the container.
@@ -273,6 +293,29 @@ final class VacuumServiceProvider extends ServiceProvider
             ),
         );
 
+        $this->registerSchemaInspection(
+            SchemaInspection::class,
+            self::SCHEMA_RULES,
+            SchemaRule::class,
+            [
+                UnindexedForeignKey::class,
+                ForeignKeyTypeMismatch::class,
+                Int4PrimaryKey::class,
+                MissingPrimaryKey::class,
+                UnindexedMorphs::class,
+                JsonNotJsonb::class,
+            ],
+            fn (Application $app, array $rules): Inspection => new SchemaInspection(
+                $app->make(TableSchemas::class),
+                $rules,
+            ),
+        );
+
+        // duplicate-index needs no statistics: two identical indexes are identical
+        // the moment both migrations have run. The same inspection therefore serves
+        // both advisors.
+        $this->schemaInspections[] = DuplicateInspection::class;
+
         $this->app->tag($this->inspections, self::INSPECTIONS);
 
         $this->app->bind(Advisor::class, function (Application $app): Advisor {
@@ -285,6 +328,20 @@ final class VacuumServiceProvider extends ServiceProvider
             }
 
             return new Advisor($inspections);
+        });
+
+        $this->app->tag($this->schemaInspections, self::SCHEMA_INSPECTIONS);
+
+        $this->app->bind(SchemaAdvisor::class, function (Application $app): SchemaAdvisor {
+            $inspections = [];
+
+            foreach ($app->tagged(self::SCHEMA_INSPECTIONS) as $inspection) {
+                if ($inspection instanceof Inspection) {
+                    $inspections[] = $inspection;
+                }
+            }
+
+            return new SchemaAdvisor(new Advisor($inspections));
         });
 
         // Registration order is teaching order within a tier: byTier() keeps
@@ -321,8 +378,6 @@ final class VacuumServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register one inspection: its rules, its binding, and its place in the tag.
-     *
      * @template TRule of object
      *
      * @param  class-string<Inspection>  $inspection
@@ -337,14 +392,57 @@ final class VacuumServiceProvider extends ServiceProvider
         array $rules,
         Closure $make,
     ): void {
+        $this->bindInspection($inspection, $tag, $contract, $rules, $make);
+
+        $this->inspections[] = $inspection;
+    }
+
+    /**
+     * The same, for the tier the schema advisor merges. Kept in its own list so
+     * that a schema rule can never reach the dashboard's score by accident.
+     *
+     * @template TRule of object
+     *
+     * @param  class-string<Inspection>  $inspection
+     * @param  class-string<TRule>  $contract
+     * @param  list<class-string<TRule>>  $rules
+     * @param  Closure(Application, list<TRule>): Inspection  $make
+     */
+    private function registerSchemaInspection(
+        string $inspection,
+        string $tag,
+        string $contract,
+        array $rules,
+        Closure $make,
+    ): void {
+        $this->bindInspection($inspection, $tag, $contract, $rules, $make);
+
+        $this->schemaInspections[] = $inspection;
+    }
+
+    /**
+     * Register one inspection: its rules, and its binding.
+     *
+     * @template TRule of object
+     *
+     * @param  class-string<Inspection>  $inspection
+     * @param  class-string<TRule>  $contract
+     * @param  list<class-string<TRule>>  $rules
+     * @param  Closure(Application, list<TRule>): Inspection  $make
+     */
+    private function bindInspection(
+        string $inspection,
+        string $tag,
+        string $contract,
+        array $rules,
+        Closure $make,
+    ): void {
         $this->app->tag($rules, $tag);
 
         $this->app->bind(
             $inspection,
             fn (Application $app): Inspection => $make($app, $this->rules($app, $tag, $contract)),
         );
-
-        $this->inspections[] = $inspection;
     }
 
     /**
@@ -384,7 +482,7 @@ final class VacuumServiceProvider extends ServiceProvider
         $this->registerSchedule();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([CheckCommand::class, InstallCommand::class, SnapshotCommand::class]);
+            $this->commands([CheckCommand::class, LintCommand::class, InstallCommand::class, SnapshotCommand::class]);
 
             $this->publishes([
                 __DIR__.'/../config/vacuum.php' => $this->app->configPath('vacuum.php'),

@@ -49,15 +49,25 @@ final readonly class Constraints
     private function toConstraint(array $row): Constraint
     {
         $columns = Cast::text($row['columns'] ?? null);
+        $columnTypes = Cast::text($row['columntypes'] ?? null);
+        $referencedColumnTypes = Cast::text($row['referencedcolumntypes'] ?? null);
 
         return new Constraint(
             schema: Cast::text($row['schemaname'] ?? null),
             table: Cast::text($row['tablename'] ?? null),
             name: Cast::text($row['constraintname'] ?? null),
             kind: Cast::text($row['kind'] ?? null),
-            columns: $columns === '' ? [] : explode(',', $columns),
+            // constraints.sql joins these three lists with a newline rather than a
+            // comma: format_type renders numeric(10,2) with a comma already inside
+            // it, and comma-splitting that would break one type into two. Neither
+            // format_type's output nor a PostgreSQL identifier can contain a
+            // newline, so it is a safe delimiter, and it is internal to this class
+            // -- nothing downstream sees it.
+            columns: $columns === '' ? [] : explode("\n", $columns),
             referencedTable: Cast::text($row['referencedtable'] ?? null),
             indexed: Cast::boolean($row['indexed'] ?? null),
+            columnTypes: $columnTypes === '' ? [] : explode("\n", $columnTypes),
+            referencedColumnTypes: $referencedColumnTypes === '' ? [] : explode("\n", $referencedColumnTypes),
         );
     }
 }
