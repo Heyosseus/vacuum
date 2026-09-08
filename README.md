@@ -18,7 +18,7 @@ Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables
 
 It shows you that statement. It never runs it.
 
-> **Status: 1.0.0.** The public API is frozen — see [What semver covers](#what-semver-covers). A breaking change to the rule contracts, `Finding`, the value objects, the configuration keys or the `--format=json` document now requires a major version.
+> **Status: 1.1.0.** The public API is frozen — see [What semver covers](#what-semver-covers). A breaking change to the rule contracts, `Finding`, the value objects, the configuration keys or the `--format=json` documents now requires a major version.
 
 ## Quick start
 
@@ -41,6 +41,7 @@ Already running a Filament panel? `php artisan vacuum:install --filament` puts t
 - [The standalone dashboard](#the-standalone-dashboard) · [Inside Filament](#inside-filament)
 - [Who may look](#who-may-look) · [Which database](#which-database)
 - [In your pipeline](#in-your-pipeline) — `vacuum:check`, and failing a build
+- [Linting the schema](#linting-the-schema) — `vacuum:lint`, and what is wrong before a row exists
 - [History over time](#history-over-time) — direction, forecasts, and what changed
 - [The SQL console](#the-sql-console) — and what actually makes it safe
 - [Tuning the thresholds](#tuning-the-thresholds) · [Writing your own rule](#writing-your-own-rule) · [Restyling the dashboard](#restyling-the-dashboard)
@@ -230,6 +231,47 @@ php artisan vacuum:check --format=json       # score, grade, deductions, finding
 
 Two things worth knowing. It **never writes** — the remediation is printed for you to read and decide on, exactly as it is on the page. And if Vacuum is disabled it **fails rather than passing**: a check that goes green because it never looked is worse than no check at all.
 
+### Linting the schema
+
+`vacuum:check` reads what the database has been *doing*, and a pipeline's database
+has not done anything. A Postgres container ninety seconds old with the migrations
+freshly applied has no dead tuples, no bloat, no freeze age and no statements —
+so most of the rules find nothing, and a perfect score on a database nobody has
+ever used is exactly the kind of green number this package exists to argue against.
+
+`vacuum:lint` asks the questions that *are* answerable there:
+
+```bash
+php artisan vacuum:lint
+```
+
+| Rule | Finds |
+| --- | --- |
+| `unindexed-foreign-key` | Foreign keys PostgreSQL created no index for, which `->constrained()` never does |
+| `foreign-key-type-mismatch` | A key referencing a different type, so the index exists and cannot be used |
+| `int4-primary-key` | A primary key that stops accepting rows at 2,147,483,647 |
+| `missing-primary-key` | Tables nothing can address a single row of |
+| `unindexed-morphs` | A polymorphic pair with no composite index leading on the type |
+| `json-not-jsonb` | `json` where `jsonb` was almost certainly meant |
+
+Every one of them is true the moment `php artisan migrate` finishes, so this belongs
+in `require-dev` and in the job that already runs your tests.
+
+It **defaults to failing on a warning**, where `vacuum:check` defaults to critical.
+The two commands mean different things by the word: a warning from `check` is a
+database drifting, and a build should not go red because bloat grew overnight. A
+warning from `lint` is a schema that was wrong the moment somebody typed it.
+
+```bash
+php artisan vacuum:lint --fail-on=critical   # critical, warning, info, or never
+php artisan vacuum:lint --format=json        # score, grade, deductions, findings
+```
+
+Schema findings are scored on their own and are **not** part of the dashboard's
+health score. Adding rules to that score would silently re-grade every existing
+installation on a `composer update`, and a grade that moves for a reason nobody
+asked for is worse than one rule fewer.
+
 ## History over time
 
 Vacuum is point-in-time by default: every page and every `vacuum:check` reads the database as it is this instant. Switch history on and it records a snapshot on a schedule, so it can tell you which way a number is *moving* — bloat that is growing, a freeze age climbing since the last time anything froze it, a cache-hit ratio measured over the last hour rather than over the life of the server.
@@ -385,14 +427,15 @@ The stylesheet is inlined rather than fetched from a CDN, on the grounds that th
 
 ## What semver covers
 
-From 1.0, these are public API and a breaking change to any of them requires a major version:
+From 1.0 — and from 1.1 where a line says so — these are public API and a breaking change to any of them requires a major version:
 
-- **The rule contracts** — `TableRule`, `IndexRule`, `SessionRule`, `StatementRule`, `BloatRule`, `CacheRule`, `DuplicateRule`, `ConfigurationRule`, `SettingRule` — and the `Inspection` contract behind them.
+- **The rule contracts** — `TableRule`, `IndexRule`, `SessionRule`, `StatementRule`, `BloatRule`, `CacheRule`, `DuplicateRule`, `ConfigurationRule`, `SettingRule` (1.0) and `SchemaRule` (1.1) — and the `Inspection` contract behind them.
 - **`Finding`, `Severity` and `Grade`**, including `Finding`'s constructor signature. A custom rule constructs one, so its parameters are as public as the interface that returns it.
-- **The value objects the contracts hand a rule**: `TableStatistic`, `IndexStatistic`, `Session`, `Statement`, `CacheStatistic`, `Settings` and `Capabilities`.
+- **The value objects the contracts hand a rule**: `TableStatistic`, `IndexStatistic`, `Session`, `Statement`, `CacheStatistic`, `Settings` and `Capabilities` (1.0), and `TableSchema` and `IndexDefinition` (1.1).
 - **Configuration keys** under `vacuum.*`, and the `VACUUM_*` environment variables that feed them. Keys may be added; existing ones will not change meaning.
-- **The `vacuum:check --format=json` document**, which is what a pipeline parses.
+- **The `vacuum:check --format=json` and `vacuum:lint --format=json` documents**, which are what a pipeline parses.
 - **Route names** (`vacuum.dashboard` and the rest) and the `Vacuum::auth()` gate.
+- **The `SCHEMA_RULES` tag** (1.1), alongside the others a custom rule is registered under.
 
 Explicitly **not** covered, and free to change in a minor release:
 

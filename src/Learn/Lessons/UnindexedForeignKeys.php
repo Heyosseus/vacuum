@@ -178,6 +178,7 @@ final readonly class UnindexedForeignKeys implements Lesson
             ."    select 1 from pg_index\n"
             ."    where indrelid = conrelid\n"
             ."    and indisvalid\n"
+            ."    and indpred is null\n"
             ."    and (indkey::int2[])[0:cardinality(conkey) - 1] = conkey\n"
             .');';
     }

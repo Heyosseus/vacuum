@@ -6,6 +6,35 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-08
+
+### Added
+
+- **The schema advisor, and `vacuum:lint`.** `vacuum:check` reads what a database has been *doing* — dead tuples, bloat, freeze age, `pg_stat_statements` — and every one of those needs a database with a history behind it. A pipeline has the opposite thing: a container ninety seconds old with the migrations freshly applied, where fifteen of the twenty rules find nothing and the command reports a perfect score on a database nobody has ever used. That is the same failure the command's own guard was written to prevent, arrived at from the other direction. `vacuum:lint` asks the questions that *are* answerable there — the ones the catalog can answer the moment `migrate` returns, without a single row existing.
+
+- **Six rules that need no statistics.** `unindexed-foreign-key`, the one that matters most: PostgreSQL indexes a primary key and a unique constraint and creates **nothing** for a foreign key, so `foreignId()->constrained()` writes half of what it looks like it wrote, and the cost lands on the *parent's* deletes as a sequential scan of the child under a lock. `foreign-key-type-mismatch`, where an `integer` key referencing a `bigint` is accepted, enforced correctly, and quietly un-indexable because the comparison crosses types — nothing in the catalog is marked wrong and the delete is simply slow forever. `int4-primary-key`, which is the wraparound story on a different clock: `increments('id')` counts to 2,147,483,647 and the next insert fails, with no warning and no slowdown first. `missing-primary-key`, which breaks logical replication before it inconveniences anybody. `unindexed-morphs`, and `json-not-jsonb`. `duplicate-index` is carried across from the dashboard's tier, because two migrations creating one index is visible on an empty database and is exactly what this is for.
+
+- **Schema findings are scored separately, by their own advisor.** `Health` computes the score from the findings and from nothing else — deliberately, so the grade can never disagree with the list beneath it — and the consequence of that property is that adding rules to the shared advisor would silently re-grade every installation that upgraded. Somebody's A becomes a C on a `composer update`, with no breaking change to point at. So `SchemaAdvisor` merges its own tier and scores it alone; the two numbers are never added and never averaged. The dashboard is untouched.
+
+- **A CI-shaped command.** `vacuum:lint` defaults to `--fail-on=warning` where `vacuum:check` defaults to `critical`, because the two mean different things by the word: a warning from `check` is a database drifting and should not redden a build overnight, while a warning from `lint` is a schema that was wrong the moment somebody typed it. It keeps `check`'s guard that a disabled Vacuum **fails rather than passes**, and carries its own `--format=json` document, which adds `evidence` and `table` — a schema finding is always about a table, and whatever reads the document will want to say which.
+
+- **New public API, covered from 1.1.** The `SchemaRule` contract, the `TableSchema` and `IndexDefinition` value objects, the `SCHEMA_RULES` tag a custom schema rule is registered under, the `vacuum:lint --format=json` document, and configuration under `vacuum.lint.*`. `SchemaRule` returns a *list* of findings where every other rule contract returns one or null: a table with four unindexed foreign keys has four problems on four columns, each fixed by a different statement, and collapsing them would read acceptably in a terminal and be useless anywhere else.
+
+- **`IndexColumns`, a catalog read describing what an index could serve** rather than whether anything has used it. `pg_stat_user_indexes` cannot say anything at all about a database created ninety seconds ago; `pg_index` is true as soon as `CREATE INDEX` returns. Expression indexes are excluded, because their `indkey` carries a placeholder that joins to no attribute and a column list with a silent gap in it is worse than no column list.
+
+### Fixed
+
+- **A partial index no longer counts as covering a foreign key.** `constraints.sql` tested `indisvalid` and not `indpred`, so an index with a `WHERE` clause satisfied the coverage check — while `TableSchema::hasIndexLeadingWith()`, written later, correctly refused it. The two disagreed, and the permissive one fed the headline rule: a foreign key covered only by a partial index was silently passed. A partial index holds only the rows its predicate admits and the referential-integrity check looks for arbitrary parent rows, so it cannot serve one. The `unindexed-foreign-keys` lesson reads the same column and is corrected with it, and the query that lesson hands the reader to run themselves is now pinned to the shipped one by a test, since it had already drifted once.
+
+- **Constraint column types are no longer split on a delimiter they can contain.** The type lists were aggregated with a comma and split on one, and `format_type` renders `numeric(10,2)` — so a foreign key onto a `decimal` column arrived as two fragments, failed its own equality test, and produced the unparseable remediation `ALTER TABLE … TYPE numeric(10;`. All three lists are aggregated on a newline now, which neither a rendered type nor an identifier can contain.
+
+### Changed
+
+- `Constraint` gains `$columnTypes`, `$referencedColumnTypes` and `typesMatch()`. Both parameters are trailing and optional, so existing construction is unaffected; `Constraint` is not among the value objects frozen at 1.0.
+- `CheckCommand`'s severity handling and finding rendering are extracted to `SeverityBar` and `FindingReporter` and shared with `vacuum:lint`, so the rule that `Severity::Unknown` never fails a build has one implementation rather than two. `CheckCommand`'s behaviour is unchanged and its tests were not touched.
+
+## [1.0.0] - 2026-07-21
+
 ### Fixed — the advice
 
 - **The configuration audit read a timeout Vacuum had set on itself.** Every query in the package runs through `ReadOnlyExecutor`, which issues `SET LOCAL statement_timeout` before the statement; the audit then selected `pg_settings.setting` from inside that same transaction and reported the number back as a fact about the server. Two rules were wrong because of it, in opposite directions. `lock-timeout-ineffective` compared a real `lock_timeout` against the 5000 Vacuum had just injected, so a textbook-correct server — `statement_timeout` 30s, `lock_timeout` 10s, the lock timeout firing first exactly as intended — was told its lock timeout could never fire, and acting on that advice would have degraded a correct configuration. `timeouts-unset` required `statement_timeout` to read `0` and therefore could not fire at all, on any server, ever: it had never detected anything. Settings are now read from `reset_val`, which is what the role, the database and `postgresql.conf` say and is provably immune to `SET LOCAL`. The session's own view stays available as `Settings::runtimeValue()` for the caller that genuinely wants it, but it is no longer the default, because a configuration rule asking "what is this server configured to" must not be answerable by the observer.
@@ -109,6 +138,8 @@ First release.
 - **A Filament v4 panel** (optional peer — nothing changes for a Blade-only install): a **Vacuum** navigation group with an **Overview** dashboard (health score and grade, database vitals, charts, the findings with copyable remediation, and live running vacuums) and read-only resources for **Tables**, **Indexes**, **Sessions** and **Statements**. Every surface shares the one `Vacuum::auth()` gate and opts out of tenant scoping, so it is at home in a multi-tenant panel.
 - **Extensibility.** Application rules can be tagged onto the advisor per subject (`TABLE_RULES`, `INDEX_RULES`, and the rest), and both the config and the dashboard views are publishable.
 
-[Unreleased]: https://github.com/heyosseus/vacuum/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/heyosseus/vacuum/compare/v1.0.1...v1.1.0
+[1.0.0]: https://github.com/heyosseus/vacuum/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/heyosseus/vacuum/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/heyosseus/vacuum/releases/tag/v0.1.0

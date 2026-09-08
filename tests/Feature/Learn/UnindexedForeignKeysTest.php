@@ -92,6 +92,20 @@ it('hands the reader a runnable statement for band three', function (): void {
         ->and($lesson->tryIt())->toContain('pg_constraint');
 });
 
+/**
+ * constraints.sql excludes a partial index from "indexed" because it cannot
+ * serve a foreign key's referential-integrity check -- that check needs to see
+ * an arbitrary parent row, not just the ones a partial index's predicate let
+ * in. tryIt() hands the reader a copy-paste query meant to reproduce the same
+ * verdict, so it has to exclude partial indexes too, or the lesson's own table
+ * and the reader's copy of the query would disagree.
+ */
+it('excludes a partial index from its copy-paste query, matching constraints.sql', function (): void {
+    $lesson = new UnindexedForeignKeys(app(Constraints::class), app(TableProfiles::class));
+
+    expect($lesson->tryIt())->toContain('indpred is null');
+});
+
 it('names its slug, title, tier, hook and entry-point position', function (): void {
     $lesson = new UnindexedForeignKeys(app(Constraints::class), app(TableProfiles::class));
 
