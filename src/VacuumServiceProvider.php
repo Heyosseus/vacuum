@@ -31,13 +31,13 @@ use Heyosseus\Vacuum\Advisor\Rules\DuplicateIndex;
 use Heyosseus\Vacuum\Advisor\Rules\EndOfLifeMajor;
 use Heyosseus\Vacuum\Advisor\Rules\ForeignKeyTypeMismatch;
 use Heyosseus\Vacuum\Advisor\Rules\IdleInTransaction;
-use Heyosseus\Vacuum\Advisor\Rules\Int4PrimaryKey;
 use Heyosseus\Vacuum\Advisor\Rules\InvalidIndex;
 use Heyosseus\Vacuum\Advisor\Rules\IoTimingOff;
 use Heyosseus\Vacuum\Advisor\Rules\JsonNotJsonb;
 use Heyosseus\Vacuum\Advisor\Rules\LockTimeoutIneffective;
 use Heyosseus\Vacuum\Advisor\Rules\MissingPrimaryKey;
 use Heyosseus\Vacuum\Advisor\Rules\MultixactWraparound;
+use Heyosseus\Vacuum\Advisor\Rules\NarrowPrimaryKey;
 use Heyosseus\Vacuum\Advisor\Rules\PendingRestart;
 use Heyosseus\Vacuum\Advisor\Rules\SlowStatement;
 use Heyosseus\Vacuum\Advisor\Rules\StaleStatistics;
@@ -88,6 +88,8 @@ use Heyosseus\Vacuum\Queries\Sessions;
 use Heyosseus\Vacuum\Queries\Statements;
 use Heyosseus\Vacuum\Queries\TableSchemas;
 use Heyosseus\Vacuum\Queries\TableStatistics;
+use Heyosseus\Vacuum\Schema\MigrationMap;
+use Heyosseus\Vacuum\Schema\MigrationScanner;
 use Heyosseus\Vacuum\Support\SqlRepository;
 use Heyosseus\Vacuum\Values\Capabilities;
 use Illuminate\Console\Scheduling\Schedule;
@@ -168,6 +170,17 @@ final class VacuumServiceProvider extends ServiceProvider
 
         // The installer verifies its own edits by handing the file to PHP itself.
         $this->app->bind(SyntaxChecker::class, PhpLintChecker::class);
+
+        $this->app->bind(MigrationMap::class, function (Application $app): MigrationMap {
+            /** @var Repository $config */
+            $config = $app->make(Repository::class);
+            $configured = $config->get('vacuum.lint.migrations_path');
+
+            return new MigrationMap(
+                is_string($configured) ? $configured : database_path('migrations'),
+                new MigrationScanner,
+            );
+        });
 
         // Every panel wants to know what the server supports, and the answer
         // cannot change underneath a single request.
@@ -300,7 +313,7 @@ final class VacuumServiceProvider extends ServiceProvider
             [
                 UnindexedForeignKey::class,
                 ForeignKeyTypeMismatch::class,
-                Int4PrimaryKey::class,
+                NarrowPrimaryKey::class,
                 MissingPrimaryKey::class,
                 UnindexedMorphs::class,
                 JsonNotJsonb::class,

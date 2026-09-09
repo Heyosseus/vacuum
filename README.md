@@ -12,13 +12,21 @@
 
 ![Vacuum — a PostgreSQL monitoring and tuning dashboard for Laravel](art/hero.png)
 
-**A PostgreSQL monitoring and tuning dashboard for Laravel.**
+**A PostgreSQL monitoring dashboard for Laravel — and a schema linter for the pipeline that ships it.**
 
 Vacuum reads what PostgreSQL already knows about itself — `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_stat_activity`, `pg_stat_database`, `pg_stat_statements`, `pg_class` — and turns it into a page that says what is wrong, what it is costing you, and the statement that would put it right.
 
 It shows you that statement. It never runs it.
 
-> **Status: 1.1.0.** The public API is frozen — see [What semver covers](#what-semver-covers). A breaking change to the rule contracts, `Finding`, the value objects, the configuration keys or the `--format=json` documents now requires a major version.
+**It does not need a production database to be useful.** `vacuum:lint` reads the catalog rather than the statistics, so it has something to say against the empty Postgres container your test job already starts: a foreign key with no index behind it, a primary key that stops accepting rows at two billion, a table nothing can address a single row of. One line in the workflow you already have —
+
+```yaml
+- run: php artisan vacuum:lint --format=github
+```
+
+— and the finding arrives as an annotation on the pull request that introduced it, on the line that introduced it. See [Linting the schema](#linting-the-schema).
+
+> **Status: 1.2.0.** The public API is frozen — see [What semver covers](#what-semver-covers). A breaking change to the rule contracts, `Finding`, the value objects, the configuration keys or the `--format=json` documents now requires a major version.
 
 ## Quick start
 
@@ -31,7 +39,9 @@ Then open `/vacuum`. That is all of it: the installer publishes the config and a
 
 ![How Vacuum works: six catalogs PostgreSQL maintains, thirteen rules, and a finding carrying the statement that fixes it](art/how-it-works.png)
 
-Already running a Filament panel? `php artisan vacuum:install --filament` puts the same data inside it — see [Inside Filament](#inside-filament). Want it in CI instead of in a browser? `php artisan vacuum:check` — see [In your pipeline](#in-your-pipeline).
+Already running a Filament panel? `php artisan vacuum:install --filament` puts the same data inside it — see [Inside Filament](#inside-filament).
+
+**In a pipeline there are two commands, and they answer different questions.** `vacuum:check` runs the full advisor against a database that has been *running* — see [In your pipeline](#in-your-pipeline). `vacuum:lint` runs against one that has only been *migrated*, which is what a test job actually has — see [Linting the schema](#linting-the-schema). The first belongs on a schedule against staging; the second belongs in `require-dev`, on every push.
 
 ## Contents
 
@@ -41,7 +51,7 @@ Already running a Filament panel? `php artisan vacuum:install --filament` puts t
 - [The standalone dashboard](#the-standalone-dashboard) · [Inside Filament](#inside-filament)
 - [Who may look](#who-may-look) · [Which database](#which-database)
 - [In your pipeline](#in-your-pipeline) — `vacuum:check`, and failing a build
-- [Linting the schema](#linting-the-schema) — `vacuum:lint`, and what is wrong before a row exists
+- [Linting the schema](#linting-the-schema) — `vacuum:lint`, a baseline, and annotations on the pull request
 - [History over time](#history-over-time) — direction, forecasts, and what changed
 - [The SQL console](#the-sql-console) — and what actually makes it safe
 - [Tuning the thresholds](#tuning-the-thresholds) · [Writing your own rule](#writing-your-own-rule) · [Restyling the dashboard](#restyling-the-dashboard)
@@ -231,7 +241,7 @@ php artisan vacuum:check --format=json       # score, grade, deductions, finding
 
 Two things worth knowing. It **never writes** — the remediation is printed for you to read and decide on, exactly as it is on the page. And if Vacuum is disabled it **fails rather than passing**: a check that goes green because it never looked is worse than no check at all.
 
-### Linting the schema
+## Linting the schema
 
 `vacuum:check` reads what the database has been *doing*, and a pipeline's database
 has not done anything. A Postgres container ninety seconds old with the migrations
@@ -245,11 +255,13 @@ ever used is exactly the kind of green number this package exists to argue again
 php artisan vacuum:lint
 ```
 
+![vacuum:lint in a pipeline: the workflow step on the left, and the finding as an annotation on the pull request diff on the right](art/lint-in-ci.png)
+
 | Rule | Finds |
 | --- | --- |
 | `unindexed-foreign-key` | Foreign keys PostgreSQL created no index for, which `->constrained()` never does |
 | `foreign-key-type-mismatch` | A key referencing a different type, so the index exists and cannot be used |
-| `int4-primary-key` | A primary key that stops accepting rows at 2,147,483,647 |
+| `narrow-primary-key` | A primary key too narrow to keep counting -- `integer` or `smallint` -- that stops accepting rows the moment it runs out of values |
 | `missing-primary-key` | Tables nothing can address a single row of |
 | `unindexed-morphs` | A polymorphic pair with no composite index leading on the type |
 | `json-not-jsonb` | `json` where `jsonb` was almost certainly meant |
@@ -271,6 +283,61 @@ Schema findings are scored on their own and are **not** part of the dashboard's
 health score. Adding rules to that score would silently re-grade every existing
 installation on a `composer update`, and a grade that moves for a reason nobody
 asked for is worse than one rule fewer.
+
+### Adopting it on a schema that predates it
+
+Run `vacuum:lint` on a five-year-old application and it will find a great many
+things. That is accurate and completely useless: nobody is going to fix four
+hundred findings this afternoon, and a build that is red for reasons nobody
+intends to act on is a build people learn to ignore.
+
+So write down what is already there, and let the linter tell you only what is new:
+
+```bash
+php artisan vacuum:lint --generate-baseline
+```
+
+That writes `vacuum-baseline.json`. **Commit it.** From then on the outstanding
+findings are excused and anything new fails the build, which is the only question
+worth asking of a legacy schema.
+
+A baseline matches on the rule and the subject and on nothing else, so rewording a
+rule — or making it more serious in a later release — never invalidates the file
+you committed. When an entry stops matching anything, because somebody fixed it,
+`vacuum:lint` says so as an `Info` finding rather than quietly carrying it: a
+baseline nobody prunes becomes a place the next defect hides.
+
+```bash
+php artisan vacuum:lint --no-baseline     # report everything, baseline or not
+php artisan vacuum:lint --baseline=path   # somewhere other than the default
+```
+
+The score is computed over what is left after suppression, and the count of what was
+suppressed is printed with the text output, carried as `suppressed` in the JSON document,
+and emitted as a `::notice` for `--format=github`. A number that quietly ignored four
+hundred findings would be the kind of green this package exists to argue against —
+and the pull request is the one place that number matters most.
+
+### On the pull request
+
+`--format=github` emits GitHub Actions workflow commands, so each finding lands as
+an annotation on the diff rather than in a log nobody opens.
+
+```yaml
+- run: php artisan vacuum:lint --format=github
+```
+
+Findings are traced back to the migration that introduced them by parsing
+`database/migrations` with PHP's own tokenizer — the same technique the Filament
+installer uses, and with the same refusal to guess. A migration whose table name is
+a variable, or that does not parse, yields no anchor; the finding is still
+reported, without a file and a line.
+
+**If you have run `php artisan schema:dump --prune`, expect few anchors.** That flag deletes
+`database/migrations` after squashing the schema into `database/schema/*.sql`, so the files
+that declared your columns are gone and there is nothing left to trace to. Plain
+`schema:dump` keeps the migrations and is unaffected. The findings are the same either way;
+only the annotations lose their line numbers.
 
 ## History over time
 
@@ -436,6 +503,8 @@ From 1.0 — and from 1.1 where a line says so — these are public API and a br
 - **The `vacuum:check --format=json` and `vacuum:lint --format=json` documents**, which are what a pipeline parses.
 - **Route names** (`vacuum.dashboard` and the rest) and the `Vacuum::auth()` gate.
 - **The `SCHEMA_RULES` tag** (1.1), alongside the others a custom rule is registered under.
+- **The baseline file format** (1.2). It is committed to your repository, which makes it an interface whether or not it is called one. Keys may be added; the `findings` map will not change meaning.
+- **`vacuum:lint --format=github`** (1.2) as an accepted value, and its severity mapping. The exact wording of an annotation is not covered.
 
 Explicitly **not** covered, and free to change in a minor release:
 
@@ -443,6 +512,7 @@ Explicitly **not** covered, and free to change in a minor release:
 - The Blade views. Publishing them is supported; the markup inside them is not frozen.
 - Everything under `Internals` and `Learn`. Both are teaching surfaces, and pinning their shape would freeze the explanation as well as the code.
 - Anything marked `@internal`.
+- `MigrationMap` and `SourceLocation`, which are console implementation detail rather than something a rule or a pipeline consumes.
 
 Vacuum supports the PostgreSQL major versions the PostgreSQL project still supports, and CI runs the suite against each of them. A major going end-of-life is a minor release here, not a major one.
 

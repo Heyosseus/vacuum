@@ -580,9 +580,152 @@ def cli_check() -> None:
     a.save("cli-check.png")
 
 
+# ---------------------------------------------------------------------------
+# 6. vacuum:lint in a pipeline
+# ---------------------------------------------------------------------------
+
+WORKFLOW = [
+    ("services:", DIM),
+    ("  postgres: { image: postgres:17 }", GRAY),
+    ("", None),
+    ("steps:", DIM),
+    ("  - run: php artisan migrate --force", GRAY),
+    ("  - run: php artisan vacuum:lint --format=github", WHITE),
+]
+
+# The diff as a reviewer sees it: the line that introduced the finding is the
+# line the finding lands on.
+DIFF = [
+    (" ", "12", "Schema::create('orders', function (Blueprint $table) {", GRAY, False),
+    ("+", "13", "    $table->id();", GRAY, True),
+    ("+", "14", "    $table->foreignId('customer_id');", WHITE, True),
+    (" ", "15", "});", GRAY, False),
+]
+
+
+def lint_pr() -> None:
+    W, H = 1600, 620
+    a = Art(W, H)
+
+    a.text(
+        W / 2,
+        48,
+        "The database is ninety seconds old and has no rows in it. "
+        "The finding still lands on the line that caused it.",
+        size=17,
+        fill=GRAY,
+        anchor="mm",
+    )
+
+    top, ph = 108, 400
+    ax, aw = 70, 520
+    bx, bw = 640, 890
+
+    a.panel(ax, top, aw, ph)
+    a.panel(bx, top, bw, ph)
+    a.arrow(600, top + ph / 2, 632, colour=DIM)
+
+    # --- A: the workflow
+    y = top + 26
+    a.text(ax + 24, y, "IN YOUR WORKFLOW", size=12, bold=True, fill=GRAY)
+    y += 36
+    a.rect(ax + 24, y, aw - 48, 172, r=8, fill=(14, 15, 18), outline=LINE, width=1)
+    ly = y + 20
+    for line, colour in WORKFLOW:
+        if line:
+            a.text(ax + 40, ly, line, size=13, fill=colour)
+        ly += 25
+    y += 196
+
+    a.chip(ax + 24, y, "require-dev", TEAL, size=12)
+    y += 46
+    for ln in (
+        "No production database, no credentials, no",
+        "extension and no superuser. Every rule here",
+        "is answerable the moment migrate finishes.",
+    ):
+        a.text(ax + 24, y, ln, size=13.5, fill=DIM)
+        y += 22
+
+    # --- B: the pull request
+    y = top + 26
+    a.text(bx + 24, y, "ON THE PULL REQUEST", size=12, bold=True, fill=GRAY)
+    y += 30
+    a.text(
+        bx + 24,
+        y,
+        "database/migrations/2024_01_11_000000_create_orders_table.php",
+        size=13,
+        fill=DIM,
+    )
+    y += 30
+
+    for mark, number, code, colour, added in DIFF:
+        if added:
+            a.rect(bx + 24, y - 4, bw - 48, 26, r=4, fill=(*TEAL, 16))
+        a.text(bx + 34, y, number, size=13, fill=(70, 74, 82))
+        a.text(bx + 72, y, mark, size=14, bold=True, fill=TEAL if added else DIM)
+        a.text(bx + 92, y, code, size=14, fill=colour)
+        y += 26
+
+    # the annotation, hung under the line that produced it
+    y += 16
+    ah = 152
+    a.rect(bx + 92, y, bw - 140, ah, r=8, fill=(14, 15, 18), outline=(*AMBER, 90), width=1)
+    a.rect(bx + 92, y, 4, ah, r=2, fill=AMBER)
+
+    iy = y + 20
+    cw = a.chip(bx + 116, iy, "WARNING", AMBER, size=11)
+    a.text(bx + 116 + cw + 14, iy + 12, "unindexed-foreign-key", size=12.5, fill=DIM, anchor="lm")
+    iy += 40
+    a.text(
+        bx + 116,
+        iy,
+        "orders.customer_id has a foreign key and no index behind it.",
+        size=14,
+        fill=WHITE,
+    )
+    iy += 26
+    a.text(
+        bx + 116,
+        iy,
+        "PostgreSQL indexes a primary key and creates nothing for this.",
+        size=13,
+        fill=GRAY,
+    )
+    iy += 30
+    a.rect(bx + 116, iy, bw - 188, 32, r=6, fill=(21, 23, 28), outline=LINE, width=1)
+    a.text(
+        bx + 128,
+        iy + 16,
+        'CREATE INDEX CONCURRENTLY ON "public"."orders" ("customer_id");',
+        size=12,
+        fill=TEAL,
+        anchor="lm",
+    )
+
+    # --- the verdict
+    by, bh = 526, 62
+    a.rect(70, by, 1460, bh, r=10, fill=(*CORAL, 20), outline=(*CORAL, 70), width=1)
+    a.rect(70, by, 4, bh, r=2, fill=CORAL)
+    a.text(
+        100,
+        by + bh / 2,
+        "Exit 1. A warning from vacuum:check is a database drifting; a warning from "
+        "vacuum:lint is a schema that was wrong the moment somebody typed it.",
+        size=17,
+        bold=True,
+        fill=CORAL,
+        anchor="lm",
+    )
+
+    a.save("lint-in-ci.png")
+
+
 if __name__ == "__main__":
     hero()
     how_it_works()
     scoring()
     safety()
     cli_check()
+    lint_pr()

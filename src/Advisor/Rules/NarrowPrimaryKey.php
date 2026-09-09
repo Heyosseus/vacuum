@@ -13,7 +13,7 @@ use Heyosseus\Vacuum\Values\Constraint;
 use Heyosseus\Vacuum\Values\TableSchema;
 
 /**
- * Finds primary keys counted in 32 bits.
+ * Finds primary keys counted in too few bits.
  *
  * This is the wraparound story told in a different register. A four-byte integer
  * counts to 2,147,483,647 and then the next insert fails, and like wraparound it
@@ -39,7 +39,7 @@ use Heyosseus\Vacuum\Values\TableSchema;
  * reach in months, so the finding would be pure noise -- and vacuum:lint's
  * default --fail-on=warning would fail that build on a table nobody can fix.
  */
-final readonly class Int4PrimaryKey implements SchemaRule
+final readonly class NarrowPrimaryKey implements SchemaRule
 {
     /** What format_type renders for the integer types narrower than bigint. */
     private const array NARROW = ['integer', 'smallint'];
@@ -81,7 +81,7 @@ final readonly class Int4PrimaryKey implements SchemaRule
             $ceiling = $column->type === 'smallint' ? '32,767' : '2,147,483,647';
 
             $findings[] = new Finding(
-                rule: 'int4-primary-key',
+                rule: 'narrow-primary-key',
                 subject: $table->qualifiedName().'.'.$name,
                 severity: Severity::Warning,
                 summary: "The primary key column {$name} is {$column->type}, so it can count to {$ceiling} "

@@ -66,7 +66,7 @@ it('refuses to advise narrowing when the parent is the narrow side', function ()
     // A legacy increments('id') parent referenced by a newer foreignId() child
     // is the most common real shape of this defect: the parent is integer, the
     // child is bigint. Narrowing the child to match would entrench the very
-    // ceiling int4-primary-key already warns about on the parent, and it would
+    // ceiling narrow-primary-key already warns about on the parent, and it would
     // fail outright once a value in the child exceeds what integer can hold.
     $findings = app(ForeignKeyTypeMismatch::class)->inspect(typedKey(['bigint'], ['integer']));
 
