@@ -6,6 +6,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-09
+
+### Added
+
+- **A baseline, which is what makes `vacuum:lint` usable on a schema that predates it.** The first run against a five-year-old application prints several hundred findings, and the only available response was to stop running it. `--generate-baseline` writes `vacuum-baseline.json`, you commit it, and from then on the outstanding findings are excused and anything new fails the build. A finding is matched on its rule and its subject and on nothing else — not the prose, not the severity — so rewording a rule never invalidates a file somebody committed months ago. That is defensible only because schema-rule subjects are data-independent: `public.orders.customer_id` means the same thing on every run, which is not true of `slow-statement` and is why `vacuum:check` has no baseline. Entries that stop matching are reported as `Info` rather than silently carried, because a baseline nobody prunes becomes a place the next defect hides, and the score is computed over what is left with the suppressed count printed beside it.
+
+- **`--format=github`, so findings arrive on the pull request rather than in a log.** Each becomes a workflow-command annotation on the diff, and a markdown table is appended to `$GITHUB_STEP_SUMMARY` when the runner offers one.
+
+- **Findings are traced back to the migration that introduced them.** `database/migrations` is read with PHP's own tokenizer — the technique the Filament installer already uses, and with the same refusal to guess: a variable table name or a file that does not parse yields no anchor, and the finding is reported without one rather than pointed at a line it did not come from. An application that has run `schema:dump --prune` has little left to trace to — that flag is the one that deletes the migrations after squashing them, while plain `schema:dump` keeps them and is unaffected — which the README says plainly rather than leaving to be discovered.
+
+### Changed
+
+- **`int4-primary-key` is now `narrow-primary-key`.** The slug named a type rather than the defect, and the rule has always fired on `smallint` as well — it prints 32,767 or 2,147,483,647 as appropriate. The rename is deliberate and deliberately early: the slug is about to become a key in the baseline file users commit, and renaming it once anybody has a baseline would invalidate all of them. It appears as the `rule` value in the `vacuum:lint --format=json` document, so a pipeline filtering on the old string needs updating.
+
 ## [1.1.0] - 2026-09-08
 
 ### Added
@@ -138,7 +152,8 @@ First release.
 - **A Filament v4 panel** (optional peer — nothing changes for a Blade-only install): a **Vacuum** navigation group with an **Overview** dashboard (health score and grade, database vitals, charts, the findings with copyable remediation, and live running vacuums) and read-only resources for **Tables**, **Indexes**, **Sessions** and **Statements**. Every surface shares the one `Vacuum::auth()` gate and opts out of tenant scoping, so it is at home in a multi-tenant panel.
 - **Extensibility.** Application rules can be tagged onto the advisor per subject (`TABLE_RULES`, `INDEX_RULES`, and the rest), and both the config and the dashboard views are publishable.
 
-[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/heyosseus/vacuum/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/heyosseus/vacuum/compare/v1.0.1...v1.1.0
 [1.0.0]: https://github.com/heyosseus/vacuum/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/heyosseus/vacuum/compare/v0.1.0...v0.3.0

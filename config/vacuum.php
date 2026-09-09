@@ -309,4 +309,29 @@ return [
         'enabled' => env('VACUUM_LEARN_ENABLED', true),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Lint
+    |--------------------------------------------------------------------------
+    |
+    | vacuum:lint reads the shape of the schema rather than its statistics, so it
+    | has something to say in a pipeline where every statistics-based rule finds
+    | nothing. These two keys are what it needs from the filesystem.
+    |
+    | 'baseline' is resolved against base_path() and is used automatically when
+    | the file exists. It is what makes the linter adoptable on a schema that
+    | predates it: without one, the first run on a legacy application prints
+    | several hundred findings and the only available response is to stop running
+    | it.
+    |
+    | 'migrations_path' is where findings are traced back to the line that
+    | introduced them. Null means database_path('migrations').
+    |
+    */
+
+    'lint' => [
+        'baseline' => env('VACUUM_LINT_BASELINE', 'vacuum-baseline.json'),
+        'migrations_path' => env('VACUUM_LINT_MIGRATIONS_PATH'),
+    ],
+
 ];

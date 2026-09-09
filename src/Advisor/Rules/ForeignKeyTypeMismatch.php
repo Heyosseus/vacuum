@@ -35,7 +35,7 @@ use Heyosseus\Vacuum\Values\TableSchema;
  * a parent that is the *narrower* side of the mismatch -- a legacy
  * increments('id') parent referenced by a newer foreignId() child, most often.
  * Narrowing the child there would entrench the very 32-bit ceiling
- * int4-primary-key is warning about on the parent, and it would fail outright
+ * narrow-primary-key is warning about on the parent, and it would fail outright
  * the first time a value exceeds what the narrower type can hold. In both cases
  * the finding still fires, because the mismatch is real and still costs a scan
  * on every delete; only the ALTER is withheld, because this rule cannot know the
@@ -153,7 +153,7 @@ final readonly class ForeignKeyTypeMismatch implements SchemaRule
             .'on the parent falls back to a scan. Here the parent is the narrow side of the mismatch: '
             ."{$key->referencedTable}'s column is {$parentType} and this one is {$childType}. The fix "
             .'has to start on the parent -- widening it is what actually raises the ceiling that '
-            .'int4-primary-key already warns about there -- and it has to happen before anything about '
+            .'narrow-primary-key already warns about there -- and it has to happen before anything about '
             .'this column changes: narrowing this column to match the parent would only entrench that '
             .'same ceiling, and widening the child on its own does not touch the parent at all, so it '
             .'would not help either. A constraint carries the referenced column\'s type but not its '

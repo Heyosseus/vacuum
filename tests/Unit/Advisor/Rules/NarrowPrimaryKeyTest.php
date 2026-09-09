@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Heyosseus\Vacuum\Advisor\Rules\Int4PrimaryKey;
+use Heyosseus\Vacuum\Advisor\Rules\NarrowPrimaryKey;
 use Heyosseus\Vacuum\Advisor\Severity;
 use Heyosseus\Vacuum\Values\Column;
 use Heyosseus\Vacuum\Values\Constraint;
@@ -25,36 +25,36 @@ function keyed(string $type, array $keyColumns = ['id']): TableSchema
 }
 
 it('reports a primary key on integer', function (): void {
-    $findings = app(Int4PrimaryKey::class)->inspect(keyed('integer'));
+    $findings = app(NarrowPrimaryKey::class)->inspect(keyed('integer'));
 
     expect($findings)->toHaveCount(1)
-        ->and($findings[0]->rule)->toBe('int4-primary-key')
+        ->and($findings[0]->rule)->toBe('narrow-primary-key')
         ->and($findings[0]->severity)->toBe(Severity::Warning)
         ->and($findings[0]->subject)->toBe('public.orders.id')
         ->and($findings[0]->summary)->toContain('2,147,483,647');
 });
 
 it('reports a primary key on smallint', function (): void {
-    expect(app(Int4PrimaryKey::class)->inspect(keyed('smallint')))->toHaveCount(1);
+    expect(app(NarrowPrimaryKey::class)->inspect(keyed('smallint')))->toHaveCount(1);
 });
 
 it('says nothing about a bigint key', function (): void {
-    expect(app(Int4PrimaryKey::class)->inspect(keyed('bigint')))->toBe([]);
+    expect(app(NarrowPrimaryKey::class)->inspect(keyed('bigint')))->toBe([]);
 });
 
 it('says nothing about a uuid or text key', function (): void {
-    expect(app(Int4PrimaryKey::class)->inspect(keyed('uuid')))->toBe([])
-        ->and(app(Int4PrimaryKey::class)->inspect(keyed('text')))->toBe([]);
+    expect(app(NarrowPrimaryKey::class)->inspect(keyed('uuid')))->toBe([])
+        ->and(app(NarrowPrimaryKey::class)->inspect(keyed('text')))->toBe([]);
 });
 
 it('says nothing about a table with no primary key', function (): void {
     // That is missing-primary-key's finding to make, not this one's. Two rules
     // firing on one defect is how a report becomes noise.
-    expect(app(Int4PrimaryKey::class)->inspect(new TableSchema('public', 'orders', [], [], [])))->toBe([]);
+    expect(app(NarrowPrimaryKey::class)->inspect(new TableSchema('public', 'orders', [], [], [])))->toBe([]);
 });
 
 it('reports each narrow column of a composite key', function (): void {
-    expect(app(Int4PrimaryKey::class)->inspect(keyed('integer', ['tenant_id', 'order_id'])))->toHaveCount(2);
+    expect(app(NarrowPrimaryKey::class)->inspect(keyed('integer', ['tenant_id', 'order_id'])))->toHaveCount(2);
 });
 
 it('says nothing when the key column is not in the column list', function (): void {
@@ -65,7 +65,7 @@ it('says nothing when the key column is not in the column list', function (): vo
         ),
     ], []);
 
-    expect(app(Int4PrimaryKey::class)->inspect($orphan))->toBe([]);
+    expect(app(NarrowPrimaryKey::class)->inspect($orphan))->toBe([]);
 });
 
 it('says nothing about Laravel\'s own migrations table', function (): void {
@@ -83,11 +83,11 @@ it('says nothing about Laravel\'s own migrations table', function (): void {
         ),
     ], []);
 
-    expect(app(Int4PrimaryKey::class)->inspect($migrations))->toBe([]);
+    expect(app(NarrowPrimaryKey::class)->inspect($migrations))->toBe([]);
 });
 
 it('offers the widening, and says it rewrites the table', function (): void {
-    $findings = app(Int4PrimaryKey::class)->inspect(keyed('integer'));
+    $findings = app(NarrowPrimaryKey::class)->inspect(keyed('integer'));
 
     expect($findings[0]->remediation)
         ->toBe('ALTER TABLE "public"."orders" ALTER COLUMN "id" TYPE bigint;')
