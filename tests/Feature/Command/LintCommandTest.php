@@ -389,6 +389,21 @@ it('warns without failing the command when the step summary cannot be written', 
         ->and(Artisan::output())->toContain('Could not append the step summary to');
 });
 
+it('writes no step summary when the runner does not offer one', function (): void {
+    // This has to unset the variable rather than rely on it being absent. On a
+    // developer's machine it is unset anyway, so every other github-format test
+    // covers this branch by accident; inside Actions the runner always sets it,
+    // and the branch would be covered locally and dead in CI.
+    stubAdvisor(schemaFinding());
+
+    putenv('GITHUB_STEP_SUMMARY');
+
+    $exit = Artisan::call('vacuum:lint', ['--format' => 'github', '--no-interaction' => true]);
+
+    expect($exit)->toBe(1)
+        ->and(Artisan::output())->toContain('::warning ');
+});
+
 afterEach(function (): void {
     // A leaked baseline file would silently suppress findings in every later
     // test in the suite, so cleanup here does not depend on a preceding test

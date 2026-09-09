@@ -98,9 +98,15 @@ final class MigrationMap
         $files = glob(rtrim($this->directory, '/\\').DIRECTORY_SEPARATOR.'*.php');
 
         foreach ($files === false ? [] : $files as $file) {
-            $source = @file_get_contents($file);
+            // A glob match that is not a readable file -- a directory named
+            // something.php is the reproducible case -- fails differently by
+            // platform: Windows returns false where Linux returns an empty
+            // string. Coalescing the two is not tidiness, it is what keeps this
+            // branch reachable on both, rather than covered on a laptop and dead
+            // in CI.
+            $source = @file_get_contents($file) ?: '';
 
-            if ($source === false) {
+            if ($source === '') {
                 continue;
             }
 
