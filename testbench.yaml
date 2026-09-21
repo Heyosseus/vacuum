@@ -1,0 +1,15 @@
+# The application Larastan boots to answer static questions about Laravel.
+#
+# Larastan resolves a `view-string` literal by asking a real, booted application
+# whether the view exists, and it builds that application with Testbench -- which
+# takes its provider list from this file. Without it the analysis application never
+# registers Vacuum's own provider, never runs the `loadViewsFrom(..., 'vacuum')`
+# that creates the namespace, and so rejects every `vacuum::` template the package
+# renders as a view that is not there.
+#
+# Registering the provider here is what makes the check honest rather than merely
+# quiet: the names the package really renders resolve, and a misspelt one is still
+# an error. Testbench's own TestCase names the same provider in
+# `getPackageProviders()`, and Laravel will not register a provider twice.
+providers:
+  - Heyosseus\Vacuum\VacuumServiceProvider
