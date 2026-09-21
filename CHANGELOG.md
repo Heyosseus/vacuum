@@ -6,6 +6,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-21
+
+### Fixed
+
+- **Searching the Indexes list threw `SQLSTATE[42702]` on every keystroke.** `IndexResource::getEloquentQuery()` joins `pg_class` to learn whether an index belongs to a partition, and `pg_class` carries a `relname` of its own — so the unqualified `->searchable(['indexrelname', 'relname'])` asked PostgreSQL a question it is right to refuse, and the first character typed into the search box produced a 500. Filament passes an already-prefixed search column through untouched and leaves a bare one bare, so both are now qualified with `pg_stat_user_indexes`, matching what the resource's own `select()` has always done. Searching by index name and by owning table both behave as before. `IndexResource` is the only resource in the package that joins, so no other list carried the same latent fault. Reported and fixed by [@wit3](https://github.com/wit3) in [#25](https://github.com/Heyosseus/vacuum/issues/25) / [#26](https://github.com/Heyosseus/vacuum/pull/26).
+
+  This is the change 1.2.1 was announced as carrying and did not: that tag was cut from a commit made fourteen minutes before the fix merged. 1.2.1 is left in place rather than moved, because Packagist had already resolved it and repointing a published tag would hand two different trees to two people asking for the same version.
+
+## [1.2.1] - 2026-09-21
+
+### Fixed
+
+- **Static analysis could not see the package's own view namespace** (affects contributors; no runtime change). Larastan answers a `view-string` question by asking a booted application whether the view exists, and builds that application with Testbench — which reads its providers from a root `testbench.yaml` the repo did not have. The analysis application therefore never registered `VacuumServiceProvider`, never ran `loadViewsFrom(__DIR__.'/../resources/views', 'vacuum')`, and treated every `vacuum::` template the package renders as a view that was not there. larastan 3.12.2 added the stub for `View::make()` that turned that into ten errors on a `main` nobody had touched. Registering the provider resolves the real names and still rejects a misspelt one, so the check was kept rather than silenced with `ignoreErrors` or deferred by pinning the analyser. Reported by [@wit3](https://github.com/wit3) in [#27](https://github.com/Heyosseus/vacuum/issues/27).
+
 ## [1.2.0] - 2026-09-09
 
 ### Added
@@ -152,7 +166,9 @@ First release.
 - **A Filament v4 panel** (optional peer — nothing changes for a Blade-only install): a **Vacuum** navigation group with an **Overview** dashboard (health score and grade, database vitals, charts, the findings with copyable remediation, and live running vacuums) and read-only resources for **Tables**, **Indexes**, **Sessions** and **Statements**. Every surface shares the one `Vacuum::auth()` gate and opts out of tenant scoping, so it is at home in a multi-tenant panel.
 - **Extensibility.** Application rules can be tagged onto the advisor per subject (`TABLE_RULES`, `INDEX_RULES`, and the rest), and both the config and the dashboard views are publishable.
 
-[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/heyosseus/vacuum/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/heyosseus/vacuum/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/heyosseus/vacuum/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/heyosseus/vacuum/compare/v1.0.1...v1.1.0
 [1.0.0]: https://github.com/heyosseus/vacuum/compare/v0.3.0...v1.0.0
