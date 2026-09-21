@@ -100,7 +100,10 @@ final class IndexResource extends Resource
                 TextColumn::make('indexrelname')
                     ->label('Index')
                     ->description(fn (IndexModel $record): string => $record->schemaname.'.'.$record->relname)
-                    ->searchable(['indexrelname', 'relname'])
+                    // Both search columns are qualified: the query joins pg_class, which
+                    // has a relname of its own, and an unqualified one leaves PostgreSQL
+                    // unable to tell which table is meant.
+                    ->searchable(['pg_stat_user_indexes.indexrelname', 'pg_stat_user_indexes.relname'])
                     ->sortable(),
 
                 TextColumn::make('index_bytes')

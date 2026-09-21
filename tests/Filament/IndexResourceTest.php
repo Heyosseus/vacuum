@@ -98,3 +98,21 @@ it('gives the index resource its labels and a single list page', function (): vo
         ->and(IndexResource::canAccess())->toBeTrue()
         ->and(array_keys(IndexResource::getPages()))->toBe(['index']);
 });
+
+it('searches an index by its own name and by the table it belongs to', function (): void {
+    $column = bootedColumns(ListIndexes::class, indexNamed('crates_label_index'))['indexrelname'];
+
+    // pg_stat_user_indexes and the joined pg_class both have a relname, so an
+    // unqualified search column leaves PostgreSQL unable to tell which is meant.
+    $byIndexName = IndexResource::getEloquentQuery();
+    $isFirst = true;
+    $column->applySearchConstraint($byIndexName, 'crates_label', $isFirst);
+
+    $byTableName = IndexResource::getEloquentQuery();
+    $isFirst = true;
+    $column->applySearchConstraint($byTableName, 'crates', $isFirst);
+
+    expect($byIndexName->pluck('indexrelname')->all())->toBe(['crates_label_index'])
+        ->and($byTableName->pluck('indexrelname')->all())
+        ->toContain('crates_pkey', 'crates_label_index', 'crates_code_unique');
+});
