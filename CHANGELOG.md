@@ -6,6 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening the Overview on a large database was one of the most expensive things that database did.** On a 160 GB PostgreSQL with ~500 tables, `pg_stat_statements` ranked the Overview's two size queries first and second across *every* role on the cluster: the Largest tables chart averaged 62 seconds a call and the Database size card 26, together over seven hours of server time in three weeks, on a database the application was meanwhile trying to serve. Both are `pg_total_relation_size()` over every row of `pg_stat_user_tables`, which has the server stat the files of every table, TOAST table and index one relation at a time — and both go through Eloquent rather than the read-only executor, so no statement timeout ever stopped them. Three changes; the page shows the same thing, one figure aside by a rounding error:
+
+  - **Database size now comes from `pg_database_size()`.** One walk of the database directory instead of one per relation: on the database above, 1 second against 8 on a quiet server. It also counts the system catalogs and the schemas the panel leaves out — which is what "database size" means to the person reading the card, and a 0.03% difference there — and it runs through the read-only executor, so it is bounded by the package's statement timeout like every other statistics read.
+  - **The Largest tables chart no longer polls.** Filament re-renders a widget every five seconds by default, and every render of this one sized the whole database again. Where the disk has gone does not change between two polls; reloading the page redraws it.
+  - **The vitals card reads each figure once per render.** The cache hit ratio was queried three times — value, description, colour — and the active sessions twice, on a card that polls.
+
+  The Tables resource still orders by `pg_total_relation_size()` across the whole catalog, which is the same cost on each list load; it is left for a separate change because making it cheap without losing exact ordering is a design question rather than a fix.
+
 ## [1.2.2] - 2026-09-21
 
 ### Fixed
