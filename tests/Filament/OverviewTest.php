@@ -75,6 +75,49 @@ it('does not poll the largest tables, which sizes every relation on each render'
     expect(invokeProtected(app(LargestTables::class), 'getPollingInterval'))->toBeNull();
 });
 
+it('sizes the largest tables through the read-only executor, as PostgreSQL ranks them', function (): void {
+    $expected = collect(DB::select(<<<'SQL'
+        SELECT relname, pg_total_relation_size(relid) AS bytes
+        FROM pg_stat_user_tables
+        ORDER BY bytes DESC
+        LIMIT 8
+        SQL));
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $data = invokeProtected(app(LargestTables::class), 'getData');
+
+    $queries = collect(DB::getQueryLog())->pluck('query');
+
+    DB::disableQueryLog();
+
+    expect($data['labels'])->toBe($expected->pluck('relname')->all())
+        ->and($data['datasets'][0]['data'])->toBe($expected->map(static fn (object $row): float => round($row->bytes / 1024 / 1024, 1))->all())
+        ->and($queries)->toContain('SET TRANSACTION READ ONLY')
+        ->and($queries->filter(static fn (string $sql): bool => str_contains($sql, '"pg_stat_user_tables"')))->toBeEmpty();
+});
+
+it('leaves the ignored schemas out of the largest tables', function (): void {
+    // A table large enough to top the chart, in a schema of its own, so ignoring that
+    // schema is the only thing that can keep it off.
+    DB::statement('CREATE SCHEMA vacuum_overview_ignored');
+
+    try {
+        DB::statement("CREATE TABLE vacuum_overview_ignored.hoard AS SELECT g AS id, repeat('x', 200) AS filler FROM generate_series(1, 50000) AS g");
+
+        $widget = static fn (): LargestTables => app(LargestTables::class);
+
+        expect(invokeProtected($widget(), 'getData')['labels'])->toContain('hoard');
+
+        config()->set('vacuum.ignored_schemas', [...config('vacuum.ignored_schemas', []), 'vacuum_overview_ignored']);
+
+        expect(invokeProtected($widget(), 'getData')['labels'])->not->toContain('hoard');
+    } finally {
+        DB::statement('DROP SCHEMA vacuum_overview_ignored CASCADE');
+    }
+});
+
 it('shapes each chart from real numbers', function (): void {
     $severity = app(FindingsBySeverity::class);
     $largest = app(LargestTables::class);
