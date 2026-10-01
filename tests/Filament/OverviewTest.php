@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Heyosseus\Vacuum\Database\ConnectionResolver;
 use Heyosseus\Vacuum\Filament\Pages\Overview;
 use Heyosseus\Vacuum\Filament\Support\PanelData;
 use Heyosseus\Vacuum\Filament\Widgets\DatabaseVitals;
@@ -14,6 +15,7 @@ use Heyosseus\Vacuum\Filament\Widgets\RunningVacuums;
 use Heyosseus\Vacuum\Support\Bytes;
 use Heyosseus\Vacuum\Vacuum;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -115,6 +117,56 @@ it('leaves the ignored schemas out of the largest tables', function (): void {
         expect(invokeProtected($widget(), 'getData')['labels'])->not->toContain('hoard');
     } finally {
         DB::statement('DROP SCHEMA vacuum_overview_ignored CASCADE');
+    }
+});
+
+/*
+ * pg_total_relation_size() takes an ACCESS SHARE lock on each relation it sizes, so a
+ * table held ACCESS EXCLUSIVE from a second connection stalls the chart's one query --
+ * the same wait a busy server's DDL or a long migration puts it in, made on purpose.
+ */
+function holdingTableLock(Closure $while): void
+{
+    $default = config('database.default');
+    config()->set('database.connections.vacuum_overview_locker', config("database.connections.{$default}"));
+
+    DB::statement('CREATE TABLE vacuum_overview_locked (id int)');
+    $locker = DB::connection('vacuum_overview_locker');
+
+    try {
+        $locker->beginTransaction();
+        $locker->statement('LOCK TABLE vacuum_overview_locked IN ACCESS EXCLUSIVE MODE');
+
+        $while();
+    } finally {
+        $locker->rollBack();
+        DB::purge('vacuum_overview_locker');
+        DB::statement('DROP TABLE vacuum_overview_locked');
+    }
+}
+
+it('says the largest tables ran out of time rather than drawing an empty database', function (): void {
+    holdingTableLock(static function (): void {
+        $widget = app(LargestTables::class);
+
+        expect($widget->getDescription())->toBe('Sizing every table took longer than the statement timeout allows.')
+            ->and(invokeProtected($widget, 'getCachedData')['labels'])->toBe([]);
+    });
+});
+
+it('lets any other failure of the largest tables surface as one', function (): void {
+    // A lock_timeout shorter than the statement timeout fails the same wait with
+    // lock_not_available rather than query_canceled, which is not the chart's to hide.
+    $connection = app(ConnectionResolver::class)->resolve();
+    $connection->statement("SET lock_timeout = '100ms'");
+
+    try {
+        holdingTableLock(static function (): void {
+            expect(fn (): array => invokeProtected(app(LargestTables::class), 'getData'))
+                ->toThrow(QueryException::class, 'lock timeout');
+        });
+    } finally {
+        $connection->statement('RESET lock_timeout');
     }
 });
 
