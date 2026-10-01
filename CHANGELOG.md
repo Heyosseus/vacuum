@@ -6,15 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-10-01
+
 ### Fixed
 
 - **Opening the Overview on a large database was one of the most expensive things that database did.** On a 160 GB PostgreSQL with ~500 tables, `pg_stat_statements` ranked the Overview's two size queries first and second across *every* role on the cluster: the Largest tables chart averaged 62 seconds a call and the Database size card 26, together over seven hours of server time in three weeks, on a database the application was meanwhile trying to serve. Both are `pg_total_relation_size()` over every row of `pg_stat_user_tables`, which has the server stat the files of every table, TOAST table and index one relation at a time — and both go through Eloquent rather than the read-only executor, so no statement timeout ever stopped them. Three changes; the page shows the same thing, one figure aside by a rounding error:
 
   - **Database size now comes from `pg_database_size()`.** One walk of the database directory instead of one per relation: on the database above, 1 second against 8 on a quiet server. It also counts the system catalogs and the schemas the panel leaves out — which is what "database size" means to the person reading the card, and a 0.03% difference there — and it runs through the read-only executor, so it is bounded by the package's statement timeout like every other statistics read.
-  - **The Largest tables chart no longer polls.** Filament re-renders a widget every five seconds by default, and every render of this one sized the whole database again. Where the disk has gone does not change between two polls; reloading the page redraws it.
+  - **The Largest tables chart no longer polls, and runs through the read-only executor.** Filament re-renders a widget every five seconds by default, and every render of this one sized the whole database again. Where the disk has gone does not change between two polls; reloading the page redraws it. The one query it still makes is now bounded by the package's statement timeout like every other statistics read: a database too large to size inside it gets an empty chart that says so under its heading, rather than a request that holds a web worker for a minute. The ignored schemas are still left out.
   - **The vitals card reads each figure once per render.** The cache hit ratio was queried three times — value, description, colour — and the active sessions twice, on a card that polls.
 
-  The Tables resource still orders by `pg_total_relation_size()` across the whole catalog, which is the same cost on each list load; it is left for a separate change because making it cheap without losing exact ordering is a design question rather than a fix.
+  The Tables resource still orders by `pg_total_relation_size()` across the whole catalog, which is the same cost on each list load; it is left for a separate change because making it cheap without losing exact ordering is a design question rather than a fix. Measured, reported and fixed by [@wit3](https://github.com/wit3) in [#30](https://github.com/Heyosseus/vacuum/pull/30).
 
 ## [1.2.2] - 2026-09-21
 
@@ -176,7 +178,8 @@ First release.
 - **A Filament v4 panel** (optional peer — nothing changes for a Blade-only install): a **Vacuum** navigation group with an **Overview** dashboard (health score and grade, database vitals, charts, the findings with copyable remediation, and live running vacuums) and read-only resources for **Tables**, **Indexes**, **Sessions** and **Statements**. Every surface shares the one `Vacuum::auth()` gate and opts out of tenant scoping, so it is at home in a multi-tenant panel.
 - **Extensibility.** Application rules can be tagged onto the advisor per subject (`TABLE_RULES`, `INDEX_RULES`, and the rest), and both the config and the dashboard views are publishable.
 
-[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/heyosseus/vacuum/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/heyosseus/vacuum/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/heyosseus/vacuum/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/heyosseus/vacuum/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/heyosseus/vacuum/compare/v1.1.0...v1.2.0
