@@ -25,6 +25,15 @@ final class LargestTables extends ChartWidget
 
     protected int|string|array $columnSpan = 1;
 
+    /**
+     * No polling. Filament's default re-renders the chart every five seconds, and every
+     * render sizes every relation in the database -- pg_total_relation_size() across
+     * pg_stat_user_tables, which is seconds on a large database and far longer under
+     * load. Where the disk has gone does not change between two polls; reloading the
+     * page redraws it.
+     */
+    protected ?string $pollingInterval = null;
+
     #[Override]
     protected function getType(): string
     {

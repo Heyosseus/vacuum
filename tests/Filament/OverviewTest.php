@@ -11,6 +11,7 @@ use Heyosseus\Vacuum\Filament\Widgets\HealthScore;
 use Heyosseus\Vacuum\Filament\Widgets\IndexFootprint;
 use Heyosseus\Vacuum\Filament\Widgets\LargestTables;
 use Heyosseus\Vacuum\Filament\Widgets\RunningVacuums;
+use Heyosseus\Vacuum\Support\Bytes;
 use Heyosseus\Vacuum\Vacuum;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -45,6 +46,33 @@ it('sums the database into a health score and vitals', function (): void {
 
     expect($health)->toHaveCount(3)
         ->and($vitals)->toHaveCount(3);
+});
+
+it('reports the database size PostgreSQL itself reports', function (): void {
+    $bytes = DB::selectOne('SELECT pg_database_size(current_database()) AS bytes')->bytes;
+
+    $vitals = invokeProtected(app(DatabaseVitals::class), 'getStats');
+
+    expect($vitals[0]->getValue())->toBe(Bytes::human((int) $bytes));
+});
+
+it('reads each vital once per render, however many places the card shows it', function (): void {
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    invokeProtected(app(DatabaseVitals::class), 'getStats');
+
+    $queries = collect(DB::getQueryLog())->pluck('query');
+
+    DB::disableQueryLog();
+
+    expect($queries->filter(static fn (string $sql): bool => str_contains($sql, 'pg_stat_database')))->toHaveCount(1)
+        ->and($queries->filter(static fn (string $sql): bool => str_contains($sql, "state = 'active'")))->toHaveCount(1)
+        ->and($queries->filter(static fn (string $sql): bool => str_contains($sql, 'pg_total_relation_size')))->toBeEmpty();
+});
+
+it('does not poll the largest tables, which sizes every relation on each render', function (): void {
+    expect(invokeProtected(app(LargestTables::class), 'getPollingInterval'))->toBeNull();
 });
 
 it('shapes each chart from real numbers', function (): void {
